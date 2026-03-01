@@ -24,11 +24,17 @@ export function AnalyticsPage() {
   const { recentStats } = useDailyStats(profile?.id)
   const [period, setPeriod] = useState<AnalyticsPeriod>('7d')
 
+  // Debug logging
+  if (import.meta.env.DEV) {
+    console.log('[XG] Analytics - recentStats:', recentStats)
+    console.log('[XG] Analytics - recentStats length:', recentStats?.length ?? 0)
+  }
+
   const days = period === '7d' ? 7 : 30
   const chartData = buildChartData(recentStats ?? [], days)
 
-  const totalReplies = (recentStats ?? []).reduce((s, r) => s + r.replies_sent, 0)
-  const totalTweets = (recentStats ?? []).reduce((s, r) => s + r.tweets_posted, 0)
+  const totalReplies = (recentStats ?? []).reduce((s, r) => s + (r.replies_sent ?? 0), 0)
+  const totalTweets = (recentStats ?? []).reduce((s, r) => s + (r.tweets_posted ?? 0), 0)
   const avgReplies =
     (recentStats ?? []).length > 0 ? Math.round(totalReplies / (recentStats ?? []).length) : 0
   const avgTweets =

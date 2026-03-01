@@ -29,15 +29,31 @@ export function useDailyStats(userId: string | undefined) {
     queryFn: async () => {
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const dateStr = thirtyDaysAgo.toISOString().slice(0, 10)
+
+      if (import.meta.env.DEV) {
+        console.log('[XG] Fetching recent-stats since:', dateStr)
+      }
 
       const { data, error } = await supabase
         .from('daily_stats')
         .select('*')
         .eq('user_id', userId!)
-        .gte('date', thirtyDaysAgo.toISOString().slice(0, 10))
+        .gte('date', dateStr)
         .order('date', { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error('[XG] recent-stats query error:', error)
+        throw error
+      }
+      
+      if (import.meta.env.DEV) {
+        console.log('[XG] recent-stats fetched:', data?.length ?? 0, 'rows')
+        if (data && data.length > 0) {
+          console.log('[XG] recent-stats sample:', data[0])
+        }
+      }
+      
       return (data ?? []) as DailyStat[]
     },
   })
