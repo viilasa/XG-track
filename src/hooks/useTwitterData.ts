@@ -147,6 +147,33 @@ export function useTwitterData(userId: string | undefined) {
   }
 }
 
+/**
+ * Fetches received_tweets (inbox) for a full goal period instead of just today.
+ * periodStartDate: 'yyyy-MM-dd' — start of the current challenge/goal window.
+ * Falls back to last 7 days when no goal duration is active.
+ */
+export function useInboxTweets(userId: string | undefined, periodStartDate: string) {
+  return useQuery({
+    queryKey: ['received-tweets', userId, periodStartDate],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('received_tweets')
+        .select('*')
+        .eq('user_id', userId!)
+        .gte('created_at_twitter', new Date(periodStartDate + 'T00:00:00').toISOString())
+        .order('created_at_twitter', { ascending: false })
+        .limit(500)
+
+      if (error) {
+        console.warn('[XG] received_tweets period query failed:', error.message)
+        return []
+      }
+      return (data ?? []) as ReceivedTweet[]
+    },
+  })
+}
+
 export function useUserBadges(userId: string | undefined) {
   return useQuery({
     queryKey: ['user-badges', userId],

@@ -1,17 +1,39 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { RefreshCw, CheckCheck } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format, subDays } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
-import { useTwitterData } from '@/hooks/useTwitterData'
+import { useGoals } from '@/hooks/useGoals'
+import { useInboxTweets } from '@/hooks/useTwitterData'
 import { useSync } from '@/hooks/useSync'
 import { ReceivedTweetCard } from '@/components/ui/TweetCard'
 import type { InboxFilter } from '@/types'
 
 export function InboxPage() {
   const { profile, refreshProfile } = useAuth()
-  const { receivedTweets, isLoading } = useTwitterData(profile?.id)
+  const { goals } = useGoals(profile?.id)
   const { forceSync, isSyncing } = useSync()
   const [filter, setFilter] = useState<InboxFilter>('pending')
+
+  // Determine the start of the current goal period
+  // • If a timed goal is active, use goal_started_at (or updated_at as fallback)
+  // • Otherwise default to last 7 days so inbox never feels empty
+  const periodStartDate = useMemo(() => {
+    if (goals?.goal_duration_days != null) {
+      const raw = goals.goal_started_at ?? goals.updated_at
+      return raw.slice(0, 10)
+    }
+    return format(subDays(new Date(), 6), 'yyyy-MM-dd')
+  }, [goals])
+
+  // Human-readable label for the header
+  const periodLabel = useMemo(() => {
+    if (goals?.goal_duration_days != null) {
+      return `${goals.goal_duration_days}-Day Challenge`
+    }
+    return 'Last 7 Days'
+  }, [goals])
+
+  const { data: receivedTweets = [], isLoading } = useInboxTweets(profile?.id, periodStartDate)
 
   const total = receivedTweets.length
   const cleared = receivedTweets.filter((t) => t.is_cleared).length
@@ -39,9 +61,9 @@ export function InboxPage() {
       {/* Header */}
       <header className="sticky top-0 z-10 bg-x-bg/80 backdrop-blur-md border-b border-x-border px-4 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-x-text font-bold text-xl">Today's Inbox</h1>
+          <h1 className="text-x-text font-bold text-xl">Inbox</h1>
           <p className="text-x-muted text-xs mt-0.5">
-            {cleared} of {total} replied · Synced {lastSynced}
+            {cleared} of {total} replied · {periodLabel} · Synced {lastSynced}
           </p>
         </div>
         <button
@@ -58,7 +80,10 @@ export function InboxPage() {
       {total > 0 && (
         <div className="px-4 py-3 border-b border-x-border space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-x-muted">Inbox cleared</span>
+            <span className="text-x-muted">
+              Inbox cleared{' '}
+              <span className="text-x-muted/60 text-xs">({periodLabel})</span>
+            </span>
             <span className={clearPct === 100 ? 'text-x-green font-bold' : 'text-x-text font-semibold'}>
               {clearPct}%
             </span>
@@ -123,8 +148,8 @@ export function InboxPage() {
 function EmptyState({ filter }: { filter: InboxFilter }) {
   const messages = {
     all: { icon: '📬', title: 'No replies received yet', sub: 'Hit Sync to fetch mentions from X.' },
-    pending: { icon: <CheckCheck size={40} className="text-x-green" />, title: 'All caught up!', sub: 'You\'ve replied to all received mentions.' },
-    cleared: { icon: '📭', title: 'No replies yet', sub: 'Reply to mentions and they\'ll appear here after syncing.' },
+    pending: { icon: <CheckCheck size={40} className="text-x-green" />, title: 'All caught up!', sub: "You've replied to all received mentions." },
+    cleared: { icon: '📭', title: 'No replies cleared yet', sub: 'Reply to mentions and they\'ll appear here after syncing.' },
   }[filter]
 
   return (

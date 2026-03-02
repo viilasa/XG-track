@@ -15,6 +15,7 @@ import { useGoals } from '@/hooks/useGoals'
 import { useStreaks } from '@/hooks/useStreaks'
 import { useDailyStats } from '@/hooks/useDailyStats'
 import { StatCard } from '@/components/ui/StatCard'
+import { ChallengeCard } from '@/components/ui/ChallengeCard'
 import type { AnalyticsPeriod, DailyStat } from '@/types'
 
 export function AnalyticsPage() {
@@ -156,17 +157,24 @@ export function AnalyticsPage() {
                   />
                   <Bar
                     dataKey="replies"
-                    name="Replies"
+                    name="Replies Sent"
                     fill="#1d9bf0"
                     radius={[4, 4, 0, 0]}
-                    maxBarSize={32}
+                    maxBarSize={28}
                   />
                   <Bar
-                    dataKey="tweets"
-                    name="Tweets"
-                    fill="#f97316"
+                    dataKey="mentions"
+                    name="Mentions"
+                    fill="#00ba7c"
                     radius={[4, 4, 0, 0]}
-                    maxBarSize={32}
+                    maxBarSize={28}
+                  />
+                  <Bar
+                    dataKey="xg"
+                    name="XG Score"
+                    fill="#a855f7"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={28}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -221,6 +229,11 @@ export function AnalyticsPage() {
           </div>
         </section>
 
+        {/* N-day challenge progress */}
+        {goals && goals.goal_duration_days != null && (
+          <ChallengeCard goals={goals} recentStats={recentStats ?? []} />
+        )}
+
         {/* Goals reference */}
         {goals && (
           <div className="bg-x-card border border-x-border rounded-2xl p-4 space-y-2">
@@ -255,10 +268,16 @@ function buildChartData(stats: DailyStat[], days: number) {
   return Array.from({ length: days }, (_, i) => {
     const d = format(subDays(new Date(), days - 1 - i), 'yyyy-MM-dd')
     const stat = stats.find((s) => s.date === d)
+    const replies = stat?.replies_sent ?? 0
+    const tweets = stat?.tweets_posted ?? 0
+    const mentions = stat?.replies_received ?? 0
+    // XG Score: weighted daily engagement (replies × 2 + tweets + mentions)
+    const xg = replies * 2 + tweets + mentions
     return {
       label: format(parseISO(d), days <= 7 ? 'EEE' : 'MM/dd'),
-      replies: stat?.replies_sent ?? 0,
-      tweets: stat?.tweets_posted ?? 0,
+      replies,
+      mentions,
+      xg,
     }
   })
 }

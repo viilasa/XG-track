@@ -42,10 +42,20 @@ export function useGoals(userId: string | undefined) {
       track_replies?: boolean
       track_tweets?: boolean
     }) => {
+      // Set goal_started_at when a duration is chosen (starts the challenge clock)
+      // Reset to null when duration is cleared
+      const goal_started_at =
+        updates.goal_duration_days != null ? new Date().toISOString() : null
+
       const { data, error } = await supabase
         .from('goals')
         .upsert(
-          { user_id: userId!, ...updates, updated_at: new Date().toISOString() },
+          {
+            user_id: userId!,
+            ...updates,
+            goal_started_at,
+            updated_at: new Date().toISOString(),
+          },
           { onConflict: 'user_id' },
         )
         .select()

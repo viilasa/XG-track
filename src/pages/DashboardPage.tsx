@@ -12,13 +12,14 @@ import { StreakCard } from '@/components/ui/StreakCard'
 import { GoalProgress } from '@/components/ui/GoalProgress'
 import { StatCard } from '@/components/ui/StatCard'
 import { CachedTweetCard } from '@/components/ui/TweetCard'
+import { ChallengeCard } from '@/components/ui/ChallengeCard'
 // import { ManualCounter } from '@/components/ui/ManualCounter'
 
 export function DashboardPage() {
   const { profile, refreshProfile } = useAuth()
   const { goals } = useGoals(profile?.id)
   const { streaks } = useStreaks(profile?.id)
-  const { todayStats } = useDailyStats(profile?.id)
+  const { todayStats, recentStats } = useDailyStats(profile?.id)
   const { todayTweets, todayReplies, recentTweets: recentTweetsFull, dataAge, isLoading } = useTwitterData(profile?.id)
   const { forceSync, isSyncing } = useSync()
   // const { manualCount: manualReplies, incrementReply, incrementTweet } = useManualCounter(profile?.id)
@@ -151,6 +152,11 @@ export function DashboardPage() {
             )}
           </div>
         </section>
+
+        {/* 7-day (or N-day) challenge */}
+        {goals && (goals.goal_duration_days != null) && (
+          <ChallengeCard goals={goals} recentStats={recentStats ?? []} />
+        )}
 
         {/* Weekly score + cleared */}
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">

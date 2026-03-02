@@ -19,6 +19,7 @@ export interface Goal {
   replies_per_day: number
   tweets_per_day: number
   goal_duration_days: number | null
+  goal_started_at: string | null
   track_replies: boolean
   track_tweets: boolean
   created_at: string
