@@ -72,43 +72,22 @@ async function officialApiFetch<T>(path: string, params: Record<string, string> 
     throw new Error('X_BEARER_TOKEN is not configured in .env file')
   }
 
-  // In both dev and prod, use the /api/x proxy (Vite proxy in dev, Vercel function in prod)
   const url = new URL('/api/x' + path, window.location.origin)
-
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
 
-  console.log(`[XG] Official API request: ${url.pathname}${url.search.slice(0, 50)}...`)
-
-  let res: Response
-  try {
-    res = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${X_BEARER_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-    })
-  } catch (networkErr) {
-    console.error(`[XG] Official API network error:`, networkErr)
-    throw new Error(`Official API network error: ${(networkErr as Error).message || 'fetch failed'}`)
-  }
-
-  console.log(`[XG] Official API response status: ${res.status}`)
+  const res = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${X_BEARER_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+  })
 
   if (!res.ok) {
-    let text = ''
-    try {
-      text = await res.text()
-    } catch {
-      text = '(could not read response body)'
-    }
-    console.error(`[XG] Official API error ${res.status}:`, text.slice(0, 500))
+    const text = await res.text().catch(() => '')
     throw new Error(`Official X API ${res.status}: ${text.slice(0, 200)}`)
   }
 
-  const json = await res.json()
-  console.log(`[XG] Official API success: ${(json as OfficialTweetResponse).data?.length ?? 0} items`)
-
-  return json as T
+  return res.json() as Promise<T>
 }
 
 function normalizeOfficialTweet(tweet: OfficialTweet, users: OfficialUser[]): TwitterTweet {
@@ -151,12 +130,6 @@ function normalizeOfficialTweet(tweet: OfficialTweet, users: OfficialUser[]): Tw
  * This endpoint searches the last 7 days of tweets
  */
 async function searchTweetsOfficial(query: string): Promise<TwitterTweet[]> {
-  if (import.meta.env.DEV) {
-    console.log(`[XG] ══════════════════════════════════════════════════`)
-    console.log(`[XG] Official API: GET /2/tweets/search/recent`)
-    console.log(`[XG] Query: "${query}"`)
-  }
-
   const tweets: TwitterTweet[] = []
   let nextToken: string | undefined
 
@@ -174,33 +147,17 @@ async function searchTweetsOfficial(query: string): Promise<TwitterTweet[]> {
 
     // Twitter API can return partial errors (e.g., some referenced tweets unavailable)
     // Only fail if there's no data at all
-    if (response.errors?.length) {
-      console.warn(`[XG] Official API partial errors:`, response.errors.map(e => e.message || e.type).join(', '))
-      // Only throw if there's no data - partial errors are OK
-      if (!response.data?.length) {
-        const errMsg = response.errors[0]?.message || response.errors[0]?.type || 'Unknown error'
-        throw new Error(`Official API error: ${errMsg}`)
-      }
+    if (response.errors?.length && !response.data?.length) {
+      const errMsg = response.errors[0]?.message || response.errors[0]?.type || 'Unknown error'
+      throw new Error(`Official API error: ${errMsg}`)
     }
 
     const users = response.includes?.users ?? []
     const pageTweets = (response.data ?? []).map((t) => normalizeOfficialTweet(t, users))
     tweets.push(...pageTweets)
 
-    if (import.meta.env.DEV) {
-      console.log(`[XG] Official API search page ${page + 1}: ${pageTweets.length} tweets`)
-      if (pageTweets.length > 0) {
-        const mostRecent = pageTweets[0]
-        console.log(`[XG] Most recent: "${mostRecent.text?.slice(0, 40)}..." at ${mostRecent.createdAt}`)
-      }
-    }
-
     nextToken = response.meta?.next_token
     if (!nextToken || pageTweets.length < 100) break
-  }
-
-  if (import.meta.env.DEV) {
-    console.log(`[XG] Official API search total: ${tweets.length} tweets fetched`)
   }
 
   return tweets
@@ -346,74 +303,32 @@ export async function fetchAllTweets(
 ): Promise<TwitterTweet[]> {
   const seenIds = new Set<string>()
   const merged: TwitterTweet[] = []
-  const addResults = (tweets: TwitterTweet[], source: string) => {
-    let added = 0
+  const addResults = (tweets: TwitterTweet[], _source: string) => {
     for (const t of tweets) {
       if (!seenIds.has(t.id)) {
         seenIds.add(t.id)
         merged.push(t)
-        added++
       }
-    }
-    if (import.meta.env.DEV && added > 0) {
-      console.log(`[XG] Added ${added} tweets from ${source}`)
     }
   }
 
-  // ── Step 1: Try Official Twitter API v2 Search (works with App-Only token) ──
+  // Try Official Twitter API v2 Search (works with App-Only token)
   let officialSuccess = false
   
   if (X_BEARER_TOKEN && twitterUserName) {
     try {
-      console.log('[XG] Trying Official Twitter API v2 Search...')
-      // Search for tweets from this user (last 7 days)
       const searchQuery = `from:${twitterUserName}`
       const officialTweets = await searchTweetsOfficial(searchQuery)
       addResults(officialTweets, 'Official API v2 Search')
       officialSuccess = officialTweets.length > 0
-
-      if (officialTweets.length > 0) {
-        const replies = officialTweets.filter((t) => t.isReply).length
-        const sorted = [...officialTweets].sort((a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
-        console.log(`[XG] Official API: ${officialTweets.length} tweets (${replies} replies)`)
-        const ageMinutes = Math.round((Date.now() - new Date(sorted[0].createdAt).getTime()) / 60000)
-        console.log(`[XG] Most recent tweet age: ${ageMinutes} minutes`)
-      } else {
-        console.log('[XG] Official API returned 0 tweets')
-      }
-    } catch (err) {
-      const errMsg = (err as Error).message || String(err) || 'Unknown error'
-      console.warn(`[XG] Official API failed: ${errMsg}`)
+    } catch {
+      // Silently fall back to twitterapi.io
     }
-  } else {
-    console.log('[XG] Skipping Official API (no token or username)')
   }
 
-  // ── Step 2: Fallback to twitterapi.io if Official API failed ────────────────
+  // Fallback to twitterapi.io if Official API failed
   if (!officialSuccess) {
-    if (import.meta.env.DEV) {
-      console.log('[XG] ═══ Falling back to twitterapi.io ═══')
-    }
     await fetchTweetsFromTwitterApiIo(twitterUserId, twitterUserName, addResults)
-  }
-
-  // ── Summary ────────────────────────────────────────────────────────────────
-  if (import.meta.env.DEV) {
-    if (merged.length > 0) {
-      const replies = merged.filter((t) => t.isReply).length
-      const sorted = [...merged].sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      const mostRecent = sorted[0]
-      console.log(`[XG] ═══ FINAL RESULT ═══`)
-      console.log(`[XG] Total: ${merged.length} tweets (${replies} replies)`)
-      console.log(`[XG] Most recent: "${mostRecent.text?.slice(0, 50)}..." at ${mostRecent.createdAt}`)
-      console.log(`[XG] Data age: ${Math.round((Date.now() - new Date(mostRecent.createdAt).getTime()) / 60000)} minutes old`)
-    } else {
-      console.warn('[XG] fetchAllTweets: all attempts returned 0 tweets.')
-    }
   }
 
   return merged
@@ -429,10 +344,7 @@ async function fetchTweetsFromTwitterApiIo(
     let cursor = ''
 
     for (let i = 0; i < maxPages; i++) {
-      if (i > 0) {
-        if (import.meta.env.DEV) console.log(`[XG] Waiting ${RATE_LIMIT_DELAY_MS}ms before page ${i + 1}...`)
-        await delayMs(RATE_LIMIT_DELAY_MS)
-      }
+      if (i > 0) await delayMs(RATE_LIMIT_DELAY_MS)
 
       const p = { ...params }
       if (cursor) p.cursor = cursor
@@ -447,37 +359,28 @@ async function fetchTweetsFromTwitterApiIo(
     return all
   }
 
+  if (!twitterUserName) return
+
   try {
-    if (twitterUserName) {
-      try {
-        const query = `from:${twitterUserName}`
-        if (import.meta.env.DEV) {
-          console.log(`[XG] twitterapi.io: GET /twitter/tweet/advanced_search → "${query}"`)
-        }
-        const searchResults = await tryFetch('/twitter/tweet/advanced_search', {
-          query,
-          queryType: 'Latest',
-        }, 2)
-        addResults(searchResults, 'twitterapi.io advanced_search')
-      } catch (e) {
-        if (import.meta.env.DEV) console.warn('[XG] Advanced Search failed:', (e as Error).message)
-      }
+    const searchResults = await tryFetch('/twitter/tweet/advanced_search', {
+      query: `from:${twitterUserName}`,
+      queryType: 'Latest',
+    }, 2)
+    addResults(searchResults, 'twitterapi.io advanced_search')
+  } catch {
+    // Ignore
+  }
 
-      await delayMs(RATE_LIMIT_DELAY_MS)
+  await delayMs(RATE_LIMIT_DELAY_MS)
 
-      try {
-        if (import.meta.env.DEV) console.log(`[XG] twitterapi.io: GET /twitter/user/last_tweets userName=${twitterUserName}`)
-        const timeline = await tryFetch('/twitter/user/last_tweets', {
-          userName: twitterUserName,
-          includeReplies: 'true',
-        }, 2)
-        addResults(timeline, 'twitterapi.io last_tweets')
-      } catch (e) {
-        if (import.meta.env.DEV) console.warn('[XG] last_tweets (userName) failed:', (e as Error).message)
-      }
-    }
-  } catch (err) {
-    console.error('[XG] twitterapi.io fallback failed:', err)
+  try {
+    const timeline = await tryFetch('/twitter/user/last_tweets', {
+      userName: twitterUserName,
+      includeReplies: 'true',
+    }, 2)
+    addResults(timeline, 'twitterapi.io last_tweets')
+  } catch {
+    // Ignore
   }
 }
 
@@ -490,59 +393,26 @@ export async function fetchMentions(
   twitterUserName: string,
   _twitterUserId?: string,
 ): Promise<TwitterTweet[]> {
-  if (import.meta.env.DEV) {
-    console.log(`[XG] Fetching mentions for @${twitterUserName}`)
-  }
-
-  // ── Step 1: Try Official Twitter API v2 Search for mentions ──────────────────
+  // Try Official Twitter API v2 Search for mentions
   if (X_BEARER_TOKEN) {
     try {
-      if (import.meta.env.DEV) {
-        console.log('[XG] ═══ Trying Official API v2 Search for mentions ═══')
-      }
-      // Search for tweets mentioning this user (last 7 days)
       const searchQuery = `@${twitterUserName} -from:${twitterUserName}`
       const officialMentions = await searchTweetsOfficial(searchQuery)
-
       if (officialMentions.length > 0) {
-        if (import.meta.env.DEV) {
-          const sorted = [...officialMentions].sort((a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          )
-          console.log(`[XG] Official API Search mentions: ${officialMentions.length} received`)
-          console.log(`[XG] Most recent: "${sorted[0].text?.slice(0, 50)}..." at ${sorted[0].createdAt}`)
-        }
         return officialMentions
       }
-    } catch (err) {
-      if (import.meta.env.DEV) {
-        console.warn(`[XG] Official API Search mentions failed: ${(err as Error).message}`)
-      }
+    } catch {
+      // Silently fall back to twitterapi.io
     }
   }
 
-  // ── Step 2: Fallback to twitterapi.io for mentions ──────────────────────────
-  if (import.meta.env.DEV) {
-    console.log('[XG] ═══ Using twitterapi.io for mentions ═══')
-  }
-
+  // Fallback to twitterapi.io for mentions
   try {
     const raw = await apiFetch<ApiResponse>('/twitter/user/mentions', {
       userName: twitterUserName,
     })
-    const mentions = extractTweets(raw).map(normalizeTweet)
-    if (import.meta.env.DEV) {
-      console.log(`[XG] twitterapi.io mentions: ${mentions.length} received`)
-      if (mentions.length > 0) {
-        const sorted = [...mentions].sort((a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
-        console.log(`[XG] Most recent mention: "${sorted[0].text?.slice(0, 50)}..." at ${sorted[0].createdAt}`)
-      }
-    }
-    return mentions
-  } catch (err) {
-    console.error('[XG] fetchMentions failed:', err)
+    return extractTweets(raw).map(normalizeTweet)
+  } catch {
     return []
   }
 }

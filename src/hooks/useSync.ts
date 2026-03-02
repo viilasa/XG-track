@@ -32,22 +32,17 @@ export function useSync() {
 
       setSyncing(true)
       try {
-        // ── Step 1: Fetch from API (2 calls total) ──────────────────────────
+        // ── Step 1: Fetch from API ──────────────────────────────────────────
         const allTweets = await fetchAllTweets(
           profile.twitter_id,
           profile.twitter_username ?? undefined,
         )
-        
-        // Log API results (both dev and prod)
-        console.log(`[XG] API returned ${allTweets.length} tweets/replies`)
 
         // Rate limit: wait 5s before second call
         await new Promise((r) => setTimeout(r, 5500))
         const mentions = profile.twitter_username
           ? await fetchMentions(profile.twitter_username, profile.twitter_id)
           : []
-        
-        console.log(`[XG] API returned ${mentions.length} mentions`)
 
         // ── Step 2: Save user's tweets to tweets_cache ──────────────────────
         if (allTweets.length > 0) {
@@ -131,23 +126,6 @@ export function useSync() {
         const today = todayString()
         const { start: todayStart, end: todayEnd } = todayBoundsUTC()
 
-        if (import.meta.env.DEV) {
-          console.log('[XG] Today bounds:', { today, todayStart, todayEnd })
-          console.log('[XG] Current time:', new Date().toISOString())
-          // Log the dates of fetched tweets to debug filtering
-          const replyDates = allTweets
-            .filter((t) => t.isReply || t.inReplyToStatusId || t.inReplyToId)
-            .map((t) => ({ id: t.id, createdAt: t.createdAt, text: t.text?.slice(0, 30) }))
-          console.log('[XG] All fetched replies with dates:', replyDates)
-          
-          // Count how many are within today bounds
-          const todayReplies = replyDates.filter((r) => {
-            const d = new Date(r.createdAt)
-            return d >= new Date(todayStart) && d <= new Date(todayEnd)
-          })
-          console.log(`[XG] Replies within today bounds: ${todayReplies.length} of ${replyDates.length}`)
-        }
-
         const { count: tweetsCount } = await supabase
           .from('tweets_cache')
           .select('id', { count: 'exact', head: true })
@@ -202,7 +180,7 @@ export function useSync() {
 
         const statsRow = {
           user_id: profile.id,
-          date: today, // Format: YYYY-MM-DD
+          date: today,
           replies_sent: replies,
           tweets_posted: tweets,
           replies_received: received,
@@ -212,27 +190,12 @@ export function useSync() {
           updated_at: new Date().toISOString(),
         }
 
-        if (import.meta.env.DEV) {
-          console.log('[XG] Upserting daily_stats:', statsRow)
-        }
-
         const { error: upsertError } = await supabase
           .from('daily_stats')
           .upsert(statsRow, { onConflict: 'user_id,date' })
 
         if (upsertError) {
-          console.error('[XG] daily_stats upsert failed:', {
-            code: upsertError.code,
-            message: upsertError.message,
-            details: upsertError.details,
-            hint: upsertError.hint,
-          })
-          console.error(
-            '[XG] If you see PGRST204 (column not found), run the migration SQL in Supabase:\n' +
-              '  supabase-migration-daily-stats.sql',
-          )
-        } else if (import.meta.env.DEV) {
-          console.log('[XG] daily_stats upsert success')
+          console.error('[XG] daily_stats upsert failed:', upsertError.message)
         }
 
         // ── Step 6: Update streaks if goals met ─────────────────────────────
@@ -251,23 +214,6 @@ export function useSync() {
         qc.invalidateQueries({ queryKey: ['recent-stats'] })
         qc.invalidateQueries({ queryKey: ['streaks'] })
         qc.invalidateQueries({ queryKey: ['user-badges'] })
-
-        if (import.meta.env.DEV) {
-          console.log('[XG] ═══════════════════════════════════════════════════')
-          console.log('[XG] SYNC SUMMARY:')
-          console.log(`[XG]   API fetched: ${allTweets.length} tweets/replies, ${mentions.length} mentions`)
-          console.log(`[XG]   Today's stats (from DB):`)
-          console.log(`[XG]     - Tweets posted: ${tweets}`)
-          console.log(`[XG]     - Replies sent: ${replies}`)
-          console.log(`[XG]     - Mentions received: ${received}`)
-          console.log(`[XG]     - Mentions cleared: ${cleared}`)
-          console.log(`[XG]   Goals: reply=${replyGoalMet ? '✓' : '✗'} (${replies}/${replyGoal}), tweet=${tweetGoalMet ? '✓' : '✗'} (${tweets}/${tweetGoal})`)
-          console.log('[XG] ═══════════════════════════════════════════════════')
-        } else {
-          console.log(
-            `[XG] Sync complete: ${tweets} tweets, ${replies} replies, ${received} received`,
-          )
-        }
       } catch (err) {
         console.error('[XG] Sync failed:', err)
       } finally {
