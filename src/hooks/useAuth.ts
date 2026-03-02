@@ -90,14 +90,23 @@ export function useAuth() {
 
       if (authHash) {
         // This is a fetch call to supabase.co — NOT a browser redirect, so works on cellular
-        const { error } = await supabase.auth.verifyOtp({
+        const { data, error } = await supabase.auth.verifyOtp({
           token_hash: authHash,
-          type: 'magiclink',
+          type: 'email',
         })
         if (error) {
           setState((prev) => ({ ...prev, loading: false, authError: error.message }))
+        } else if (data?.user) {
+          // Explicitly set session in case onAuthStateChange is slow to fire
+          setState((prev) => ({
+            ...prev,
+            user: data.user,
+            session: data.session,
+            loading: false,
+            authError: null,
+          }))
+          syncProfile(data.user)
         }
-        // On success, onAuthStateChange fires below and sets the session
         return
       }
 
