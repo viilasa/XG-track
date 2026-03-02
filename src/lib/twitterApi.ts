@@ -77,42 +77,36 @@ async function officialApiFetch<T>(path: string, params: Record<string, string> 
 
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
 
-  if (import.meta.env.DEV) {
-    console.log(`[XG] ══════════════════════════════════════════════════`)
-    console.log(`[XG] Official API: ${path}`)
-    console.log(`[XG] Token length: ${X_BEARER_TOKEN.length} chars`)
-    console.log(`[XG] Token preview: ${X_BEARER_TOKEN.slice(0, 30)}...${X_BEARER_TOKEN.slice(-10)}`)
+  console.log(`[XG] Official API request: ${url.pathname}${url.search.slice(0, 50)}...`)
+
+  let res: Response
+  try {
+    res = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${X_BEARER_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    })
+  } catch (networkErr) {
+    console.error(`[XG] Official API network error:`, networkErr)
+    throw new Error(`Official API network error: ${(networkErr as Error).message || 'fetch failed'}`)
   }
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${X_BEARER_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-  })
+  console.log(`[XG] Official API response status: ${res.status}`)
 
   if (!res.ok) {
-    const text = await res.text()
-    console.error(`[XG] Official API error ${res.status}:`, text.slice(0, 500))
-    if (res.status === 401) {
-      console.error(`[XG] ⚠️ 401 Unauthorized - Bearer token may be invalid or expired.`)
-    } else if (res.status === 403) {
-      console.error(`[XG] ⚠️ 403 Forbidden - App may not have access to this endpoint.`)
-    } else if (res.status === 429) {
-      console.error(`[XG] ⚠️ 429 Rate Limited - Too many requests.`)
-    } else if (res.status === 500) {
-      console.error(`[XG] ⚠️ 500 Server Error - Check Vercel function logs.`)
+    let text = ''
+    try {
+      text = await res.text()
+    } catch {
+      text = '(could not read response body)'
     }
-    throw new Error(`Official X API ${res.status}: ${text}`)
+    console.error(`[XG] Official API error ${res.status}:`, text.slice(0, 500))
+    throw new Error(`Official X API ${res.status}: ${text.slice(0, 200)}`)
   }
 
   const json = await res.json()
-  if (import.meta.env.DEV) {
-    console.log(`[XG] Official API SUCCESS:`, {
-      dataCount: (json as OfficialTweetResponse).data?.length ?? 0,
-      hasErrors: !!(json as OfficialTweetResponse).errors?.length,
-    })
-  }
+  console.log(`[XG] Official API success: ${(json as OfficialTweetResponse).data?.length ?? 0} items`)
 
   return json as T
 }
