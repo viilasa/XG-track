@@ -172,11 +172,15 @@ async function searchTweetsOfficial(query: string): Promise<TwitterTweet[]> {
 
     const response = await officialApiFetch<OfficialTweetResponse>('/2/tweets/search/recent', params)
 
+    // Twitter API can return partial errors (e.g., some referenced tweets unavailable)
+    // Only fail if there's no data at all
     if (response.errors?.length) {
-      if (import.meta.env.DEV) {
-        console.error(`[XG] Official API search errors:`, response.errors)
+      console.warn(`[XG] Official API partial errors:`, response.errors.map(e => e.message || e.type).join(', '))
+      // Only throw if there's no data - partial errors are OK
+      if (!response.data?.length) {
+        const errMsg = response.errors[0]?.message || response.errors[0]?.type || 'Unknown error'
+        throw new Error(`Official API error: ${errMsg}`)
       }
-      throw new Error(`Official API error: ${response.errors[0].message}`)
     }
 
     const users = response.includes?.users ?? []
