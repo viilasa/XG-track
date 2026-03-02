@@ -68,14 +68,12 @@ interface OfficialTweetResponse {
 }
 
 async function officialApiFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  if (!X_BEARER_TOKEN) {
+  if (!X_BEARER_TOKEN && import.meta.env.DEV) {
     throw new Error('X_BEARER_TOKEN is not configured in .env file')
   }
 
-  const pathPrefix = import.meta.env.DEV ? '/api/x' : ''
-  const url = import.meta.env.DEV
-    ? new URL(pathPrefix + path, window.location.origin)
-    : new URL(path, 'https://api.x.com')
+  // In both dev and prod, use the /api/x proxy (Vite proxy in dev, Vercel function in prod)
+  const url = new URL('/api/x' + path, window.location.origin)
 
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
 
@@ -216,10 +214,8 @@ async function searchTweetsOfficial(query: string): Promise<TwitterTweet[]> {
 // ─── twitterapi.io (fallback) ─────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  const pathPrefix = import.meta.env.DEV ? '/api/twitter' : ''
-  const url = import.meta.env.DEV
-    ? new URL(pathPrefix + path, window.location.origin)
-    : new URL(path, 'https://api.twitterapi.io')
+  // In both dev and prod, use the /api/twitter proxy (Vite proxy in dev, Vercel function in prod)
+  const url = new URL('/api/twitter' + path, window.location.origin)
 
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
 

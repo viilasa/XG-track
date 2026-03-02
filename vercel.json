@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/twitter/:path*",
+      "destination": "/api/twitter?path=:path*"
+    },
+    {
+      "source": "/api/x/:path*",
+      "destination": "/api/x?path=:path*"
+    }
+  ]
+}
