@@ -1,7 +1,7 @@
 import { useAuth } from '@/hooks/useAuth'
 
 export function AuthPage() {
-  const { signIn, loading } = useAuth()
+  const { signIn, loading, authError } = useAuth()
 
   return (
     <div className="min-h-screen bg-x-bg flex">
@@ -57,6 +57,12 @@ export function AuthPage() {
               </svg>
               Sign in with X
             </button>
+
+            {authError && (
+              <p className="text-red-500 text-xs text-center px-4 break-words">
+                Error: {authError}
+              </p>
+            )}
 
             <p className="text-x-muted text-xs text-center leading-relaxed px-4">
               By signing in, you agree to grant XG Tracker read access to your X activity.
