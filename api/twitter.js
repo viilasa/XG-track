@@ -1,5 +1,5 @@
 // Vercel Serverless Function to proxy twitterapi.io requests
-// Catch-all route: /api/twitter/* -> https://api.twitterapi.io/*
+// Route: /api/twitter?path=twitter/user/mentions&userName=...
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -13,22 +13,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get the path segments from the catch-all route
-    const pathSegments = req.query.path;
+    // Get the path from query parameter
+    const { path, ...queryParams } = req.query;
     
-    if (!pathSegments || pathSegments.length === 0) {
-      return res.status(400).json({ error: 'Missing path' });
+    if (!path) {
+      return res.status(400).json({ error: 'Missing path parameter' });
     }
 
     // Build the twitterapi.io URL
-    const apiPath = Array.isArray(pathSegments) ? pathSegments.join('/') : pathSegments;
+    const apiPath = Array.isArray(path) ? path.join('/') : path;
     const url = new URL(`https://api.twitterapi.io/${apiPath}`);
     
-    // Add query params (excluding 'path' which is the route param)
-    Object.entries(req.query).forEach(([key, value]) => {
-      if (key !== 'path' && value) {
-        url.searchParams.set(key, String(value));
-      }
+    // Add query params
+    Object.entries(queryParams).forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, String(value));
     });
 
     // Get API key from environment
