@@ -106,6 +106,13 @@ export function useAuth() {
             authError: null,
           }))
           syncProfile(data.user)
+        } else {
+          // verifyOtp returned no error and no user — unexpected
+          setState((prev) => ({
+            ...prev,
+            loading: false,
+            authError: `verifyOtp returned no user (data: ${JSON.stringify(data)})`,
+          }))
         }
         return
       }
