@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { initiateTwitterOAuth } from '@/lib/twitterOAuth'
 import type { Profile } from '@/types'
 
 interface AuthState {
@@ -8,6 +9,7 @@ interface AuthState {
   session: Session | null
   profile: Profile | null
   loading: boolean
+  authError: string | null
 }
 
 export function useAuth() {
@@ -16,20 +18,22 @@ export function useAuth() {
     session: null,
     profile: null,
     loading: true,
+    authError: null,
   })
 
   const syncProfile = useCallback(async (user: User) => {
     const meta = user.user_metadata as Record<string, string | undefined>
 
-    // Extract twitter_id from all possible metadata keys
+    // Extract twitter_id — check all keys set by both old Supabase OAuth and our new flow
     let twitterId: string | null =
       meta.provider_id ??
+      meta.twitter_id ??
       meta.sub ??
       meta.user_id ??
       meta.id ??
       null
 
-    // Ultimate fallback: Supabase stores provider ID in identities array
+    // Fallback: Supabase stores provider ID in identities array
     if (!twitterId && user.identities && user.identities.length > 0) {
       twitterId = user.identities[0].id ?? null
     }
@@ -69,23 +73,61 @@ export function useAuth() {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setState((prev) => ({ ...prev, user: session.user, session, loading: false }))
-        syncProfile(session.user)
-      } else {
-        setState((prev) => ({ ...prev, loading: false }))
+    const handleOAuthCallback = async () => {
+      const params = new URLSearchParams(window.location.search)
+      const authHash = params.get('auth_hash')
+      const authError = params.get('auth_error')
+
+      // Clean URL immediately so tokens don't linger
+      if (authHash || authError) {
+        window.history.replaceState({}, '', '/')
       }
-    })
+
+      if (authError) {
+        setState((prev) => ({ ...prev, loading: false, authError }))
+        return
+      }
+
+      if (authHash) {
+        // This is a fetch call to supabase.co — NOT a browser redirect, so works on cellular
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: authHash,
+          type: 'magiclink',
+        })
+        if (error) {
+          setState((prev) => ({ ...prev, loading: false, authError: error.message }))
+        }
+        // On success, onAuthStateChange fires below and sets the session
+        return
+      }
+
+      // Normal session restore
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setState((prev) => ({ ...prev, user: session.user, session, loading: false }))
+          syncProfile(session.user)
+        } else {
+          setState((prev) => ({ ...prev, loading: false }))
+        }
+      })
+    }
+
+    handleOAuthCallback()
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        setState((prev) => ({ ...prev, user: session.user, session, loading: false }))
+        setState((prev) => ({
+          ...prev,
+          user: session.user,
+          session,
+          loading: false,
+          authError: null,
+        }))
         syncProfile(session.user)
       } else {
-        setState({ user: null, session: null, profile: null, loading: false })
+        setState({ user: null, session: null, profile: null, loading: false, authError: null })
       }
     })
 
@@ -93,10 +135,7 @@ export function useAuth() {
   }, [syncProfile])
 
   const signIn = useCallback(async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'x' as any,
-      options: { redirectTo: window.location.origin },
-    })
+    await initiateTwitterOAuth()
   }, [])
 
   const signOut = useCallback(async () => {
