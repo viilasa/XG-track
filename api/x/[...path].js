@@ -1,5 +1,5 @@
 // Vercel Serverless Function to proxy Official Twitter API v2 requests
-// This avoids CORS issues in production
+// Catch-all route: /api/x/* -> https://api.x.com/*
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -13,27 +13,32 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get the path after /api/x
-    const { path, ...queryParams } = req.query;
+    // Get the path segments from the catch-all route
+    const pathSegments = req.query.path;
     
-    if (!path) {
-      return res.status(400).json({ error: 'Missing path parameter' });
+    if (!pathSegments || pathSegments.length === 0) {
+      return res.status(400).json({ error: 'Missing path' });
     }
 
     // Build the api.x.com URL
-    const apiPath = Array.isArray(path) ? path.join('/') : path;
+    const apiPath = Array.isArray(pathSegments) ? pathSegments.join('/') : pathSegments;
     const url = new URL(`https://api.x.com/${apiPath}`);
     
-    // Add query params
-    Object.entries(queryParams).forEach(([key, value]) => {
-      if (value) url.searchParams.set(key, value);
+    // Add query params (excluding 'path' which is the route param)
+    Object.entries(req.query).forEach(([key, value]) => {
+      if (key !== 'path' && value) {
+        url.searchParams.set(key, String(value));
+      }
     });
 
     // Get Bearer token from environment
     const bearerToken = process.env.X_BEARER_TOKEN;
     if (!bearerToken) {
+      console.error('X_BEARER_TOKEN not found in environment');
       return res.status(500).json({ error: 'X_BEARER_TOKEN not configured' });
     }
+
+    console.log(`[X API Proxy] ${req.method} ${url.toString()}`);
 
     // Make the request to api.x.com
     const response = await fetch(url.toString(), {
@@ -45,6 +50,8 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+    
+    console.log(`[X API Proxy] Response status: ${response.status}`);
     
     // Return the response
     res.status(response.status).json(data);
