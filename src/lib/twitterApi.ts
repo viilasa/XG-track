@@ -93,18 +93,15 @@ async function officialApiFetch<T>(path: string, params: Record<string, string> 
 
   if (!res.ok) {
     const text = await res.text()
-    if (import.meta.env.DEV) {
-      console.error(`[XG] Official API error ${res.status}:`, text.slice(0, 300))
-      if (res.status === 401) {
-        console.error(`[XG] ⚠️ 401 Unauthorized - Your Bearer token may be invalid or expired.`)
-        console.error(`[XG] Please regenerate your Bearer token from: https://developer.x.com/en/portal/dashboard`)
-        console.error(`[XG] Go to your App → Keys and tokens → Bearer Token → Regenerate`)
-      } else if (res.status === 403) {
-        console.error(`[XG] ⚠️ 403 Forbidden - Your app may not have access to this endpoint.`)
-        console.error(`[XG] Check your Twitter Developer account tier and app permissions.`)
-      } else if (res.status === 429) {
-        console.error(`[XG] ⚠️ 429 Rate Limited - Too many requests. Wait before trying again.`)
-      }
+    console.error(`[XG] Official API error ${res.status}:`, text.slice(0, 500))
+    if (res.status === 401) {
+      console.error(`[XG] ⚠️ 401 Unauthorized - Bearer token may be invalid or expired.`)
+    } else if (res.status === 403) {
+      console.error(`[XG] ⚠️ 403 Forbidden - App may not have access to this endpoint.`)
+    } else if (res.status === 429) {
+      console.error(`[XG] ⚠️ 429 Rate Limited - Too many requests.`)
+    } else if (res.status === 500) {
+      console.error(`[XG] ⚠️ 500 Server Error - Check Vercel function logs.`)
     }
     throw new Error(`Official X API ${res.status}: ${text}`)
   }
@@ -389,7 +386,7 @@ export async function fetchAllTweets(
         console.log('[XG] Official API returned 0 tweets')
       }
     } catch (err) {
-      const errMsg = (err as Error).message
+      const errMsg = (err as Error).message || String(err) || 'Unknown error'
       console.warn(`[XG] Official API failed: ${errMsg}`)
     }
   } else {

@@ -29,12 +29,23 @@ export default async function handler(req, res) {
       if (value) url.searchParams.set(key, String(value));
     });
 
-    // Get Bearer token from environment
-    const bearerToken = process.env.X_BEARER_TOKEN;
+    // Get Bearer token from environment and decode if URL-encoded
+    let bearerToken = process.env.X_BEARER_TOKEN;
     if (!bearerToken) {
       console.error('X_BEARER_TOKEN not found in environment');
       return res.status(500).json({ error: 'X_BEARER_TOKEN not configured' });
     }
+    
+    // Decode URL-encoded token if needed
+    if (bearerToken.includes('%')) {
+      try {
+        bearerToken = decodeURIComponent(bearerToken);
+      } catch (e) {
+        console.warn('Failed to decode bearer token:', e.message);
+      }
+    }
+    
+    console.log(`[X API Proxy] Token length: ${bearerToken.length}, starts with: ${bearerToken.slice(0, 20)}...`);
 
     console.log(`[X API Proxy] ${req.method} ${url.toString()}`);
 
@@ -55,6 +66,10 @@ export default async function handler(req, res) {
     res.status(response.status).json(data);
   } catch (error) {
     console.error('X API proxy error:', error);
-    res.status(500).json({ error: 'Proxy request failed', message: error.message });
+    res.status(500).json({ 
+      error: 'Proxy request failed', 
+      message: error.message || 'Unknown error',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }
