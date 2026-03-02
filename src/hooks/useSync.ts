@@ -37,12 +37,17 @@ export function useSync() {
           profile.twitter_id,
           profile.twitter_username ?? undefined,
         )
+        
+        // Log API results (both dev and prod)
+        console.log(`[XG] API returned ${allTweets.length} tweets/replies`)
 
         // Rate limit: wait 5s before second call
         await new Promise((r) => setTimeout(r, 5500))
         const mentions = profile.twitter_username
           ? await fetchMentions(profile.twitter_username, profile.twitter_id)
           : []
+        
+        console.log(`[XG] API returned ${mentions.length} mentions`)
 
         // ── Step 2: Save user's tweets to tweets_cache ──────────────────────
         if (allTweets.length > 0) {

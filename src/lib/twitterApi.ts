@@ -370,31 +370,30 @@ export async function fetchAllTweets(
   
   if (X_BEARER_TOKEN && twitterUserName) {
     try {
-      if (import.meta.env.DEV) {
-        console.log('[XG] ═══ Trying Official Twitter API v2 Search (App-Only) ═══')
-      }
+      console.log('[XG] Trying Official Twitter API v2 Search...')
       // Search for tweets from this user (last 7 days)
       const searchQuery = `from:${twitterUserName}`
       const officialTweets = await searchTweetsOfficial(searchQuery)
       addResults(officialTweets, 'Official API v2 Search')
       officialSuccess = officialTweets.length > 0
 
-      if (import.meta.env.DEV && officialTweets.length > 0) {
+      if (officialTweets.length > 0) {
         const replies = officialTweets.filter((t) => t.isReply).length
         const sorted = [...officialTweets].sort((a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )
-        console.log(`[XG] Official API Search: ${officialTweets.length} tweets (${replies} replies)`)
-        console.log(`[XG] Most recent: "${sorted[0].text?.slice(0, 50)}..." at ${sorted[0].createdAt}`)
+        console.log(`[XG] Official API: ${officialTweets.length} tweets (${replies} replies)`)
         const ageMinutes = Math.round((Date.now() - new Date(sorted[0].createdAt).getTime()) / 60000)
-        console.log(`[XG] Data age: ${ageMinutes} minutes old`)
+        console.log(`[XG] Most recent tweet age: ${ageMinutes} minutes`)
+      } else {
+        console.log('[XG] Official API returned 0 tweets')
       }
     } catch (err) {
       const errMsg = (err as Error).message
-      if (import.meta.env.DEV) {
-        console.warn(`[XG] Official API Search failed: ${errMsg}`)
-      }
+      console.warn(`[XG] Official API failed: ${errMsg}`)
     }
+  } else {
+    console.log('[XG] Skipping Official API (no token or username)')
   }
 
   // ── Step 2: Fallback to twitterapi.io if Official API failed ────────────────
