@@ -106,14 +106,14 @@ export function DashboardPage() {
               color="blue"
               active={(streaks?.current_tweet_streak ?? 0) > 0}
             />
-            <StreakCard
+            {/* <StreakCard
               label="Engagement"
               current={streaks?.current_engagement_streak ?? 0}
               longest={streaks?.longest_engagement_streak ?? 0}
               icon="💪"
               color="green"
               active={(streaks?.current_engagement_streak ?? 0) > 0}
-            />
+            /> */}
           </div>
         </section>
 
