@@ -9,4 +9,10 @@ const proxyUrl = import.meta.env.PROD
   ? `${window.location.origin}/api/supabase`
   : supabaseUrl
 
-export const supabase = createClient(proxyUrl, supabaseAnonKey)
+// Use a fixed storage key so it matches what /api/auth/callback writes
+const projectRef = new URL(supabaseUrl).hostname.split('.')[0]
+export const STORAGE_KEY = `sb-${projectRef}-auth-token`
+
+export const supabase = createClient(proxyUrl, supabaseAnonKey, {
+  auth: { storageKey: STORAGE_KEY },
+})
