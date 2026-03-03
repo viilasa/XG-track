@@ -126,8 +126,8 @@ export default async function handler(req, res) {
       return res.redirect('/?auth_error=no_user_id')
     }
 
-    // 4. Set a one-time password and pass credentials to client
-    //    signInWithPassword is the most reliable Supabase auth method
+    // 4. Set a one-time password and sign in SERVER-SIDE to get session tokens
+    //    This way the client NEVER contacts supabase.co directly (blocked on mobile carriers)
     const oneTimePass = randomBytes(32).toString('hex')
     const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
       password: oneTimePass,
@@ -139,9 +139,28 @@ export default async function handler(req, res) {
       return res.redirect('/?auth_error=update_failed')
     }
 
-    // 5. Store credentials in localStorage via an intermediate HTML page, then navigate to app
-    //    This bypasses ALL URL parameter/hash/rewrite issues
-    const payload = Buffer.from(JSON.stringify({ e: userEmail, p: oneTimePass })).toString('base64')
+    // Sign in server-side using a regular (anon) client to get real session tokens
+    const anonClient = createClient(
+      process.env.SUPABASE_URL,
+      process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+    const { data: signInData, error: signInError } = await anonClient.auth.signInWithPassword({
+      email: userEmail,
+      password: oneTimePass,
+    })
+
+    if (signInError || !signInData?.session) {
+      console.error('[Auth] Server-side sign-in failed:', signInError?.message)
+      return res.redirect('/?auth_error=signin_failed')
+    }
+
+    // 5. Store session tokens in localStorage via an intermediate HTML page
+    //    Client calls setSession() — no fetch to supabase.co needed
+    const payload = Buffer.from(JSON.stringify({
+      access_token: signInData.session.access_token,
+      refresh_token: signInData.session.refresh_token,
+    })).toString('base64')
     res.setHeader('Content-Type', 'text/html')
     res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
       try {

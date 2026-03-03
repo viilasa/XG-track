@@ -84,16 +84,16 @@ export function useAuth() {
         return
       }
 
-      // Check for auth credentials in localStorage (set by /api/auth/callback HTML page)
+      // Check for session tokens in localStorage (set by /api/auth/callback HTML page)
+      // The server already signed in — we just set the session locally (NO fetch to supabase.co)
       const authCred = localStorage.getItem('xg_auth_cred')
       if (authCred) {
         localStorage.removeItem('xg_auth_cred')
         try {
-          const { e: email, p: password } = JSON.parse(atob(authCred))
-          // signInWithPassword is a fetch call to supabase.co — not a browser redirect
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
+          const { access_token, refresh_token } = JSON.parse(atob(authCred))
+          const { data, error } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
           })
           if (error) {
             setState((prev) => ({ ...prev, loading: false, authError: error.message }))
