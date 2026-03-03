@@ -74,26 +74,20 @@ export function useAuth() {
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
-      // Check query params (for auth_error) and hash fragment (for auth_cred)
+      // Check for auth error in query params
       const params = new URLSearchParams(window.location.search)
       const authError = params.get('auth_error')
 
-      // auth_cred comes via hash fragment (immune to server rewrites)
-      const hash = window.location.hash.replace('#', '')
-      const hashParams = new URLSearchParams(hash)
-      const authCred = hashParams.get('auth_cred')
-
-      // Clean URL immediately so credentials don't linger
-      if (authCred || authError) {
-        window.history.replaceState({}, '', '/')
-      }
-
       if (authError) {
+        window.history.replaceState({}, '', '/')
         setState((prev) => ({ ...prev, loading: false, authError }))
         return
       }
 
+      // Check for auth credentials in localStorage (set by /api/auth/callback HTML page)
+      const authCred = localStorage.getItem('xg_auth_cred')
       if (authCred) {
+        localStorage.removeItem('xg_auth_cred')
         try {
           const { e: email, p: password } = JSON.parse(atob(authCred))
           // signInWithPassword is a fetch call to supabase.co — not a browser redirect
@@ -119,11 +113,11 @@ export function useAuth() {
               authError: 'Sign in failed — no user returned',
             }))
           }
-        } catch {
+        } catch (err) {
           setState((prev) => ({
             ...prev,
             loading: false,
-            authError: 'Failed to parse auth credentials',
+            authError: `Auth parse error: ${err instanceof Error ? err.message : String(err)}`,
           }))
         }
         return

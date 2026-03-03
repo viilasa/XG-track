@@ -139,9 +139,18 @@ export default async function handler(req, res) {
       return res.redirect('/?auth_error=update_failed')
     }
 
-    // 5. Redirect to app with credentials via hash fragment (immune to server rewrites)
+    // 5. Store credentials in localStorage via an intermediate HTML page, then navigate to app
+    //    This bypasses ALL URL parameter/hash/rewrite issues
     const payload = Buffer.from(JSON.stringify({ e: userEmail, p: oneTimePass })).toString('base64')
-    res.redirect(`/#auth_cred=${encodeURIComponent(payload)}`)
+    res.setHeader('Content-Type', 'text/html')
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
+      try {
+        localStorage.setItem('xg_auth_cred', '${payload}');
+        window.location.replace('/');
+      } catch(e) {
+        document.body.textContent = 'Auth error: ' + e.message;
+      }
+    </script><noscript>Enable JavaScript to sign in.</noscript></body></html>`)
   } catch (err) {
     console.error('[Auth] Unexpected error:', err.message)
     res.redirect('/?auth_error=server_error')
