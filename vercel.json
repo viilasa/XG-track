@@ -9,11 +9,11 @@
       "destination": "/api/twitter?path=:path*"
     },
     {
-      "source": "/api/supabase/:path*",
-      "destination": "/api/supabase?path=:path*"
+      "source": "/sb/:path*",
+      "destination": "https://sofmnrkibynnjeeoichz.supabase.co/:path*"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|sb/).*)",
       "destination": "/index.html"
     }
   ]

@@ -5,8 +5,9 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
 // In production, proxy all Supabase calls through our Vercel domain
 // to bypass mobile carriers that block supabase.co
+// Uses Vercel edge rewrite at /sb/* → supabase.co/* (no serverless function)
 const proxyUrl = import.meta.env.PROD
-  ? `${window.location.origin}/api/supabase`
+  ? `${window.location.origin}/sb`
   : supabaseUrl
 
 // Use a fixed storage key so it matches what /api/auth/callback writes
