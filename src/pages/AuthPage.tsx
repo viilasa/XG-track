@@ -67,6 +67,10 @@ export function AuthPage() {
             <p className="text-x-muted text-xs text-center leading-relaxed px-4">
               By signing in, you agree to grant XG Tracker read access to your X activity.
             </p>
+
+            <p className="text-x-muted/50 text-[10px] text-center mt-4">
+              v4 | ls: {typeof window !== 'undefined' ? (localStorage.getItem('xg_auth_cred') ? 'HAS_CRED' : 'empty') : '?'}
+            </p>
           </div>
         </div>
       </div>
