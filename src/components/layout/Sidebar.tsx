@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, Link, useNavigate } from 'react-router-dom'
 import {
   Home,
   Calendar,
@@ -52,13 +52,20 @@ export function Sidebar({ profile, onSignOut, onSetGoals, variant = 'desktop' }:
             )}
           </NavLink>
         ))}
-        <button
-          onClick={onSetGoals}
-          className="flex flex-col items-center gap-1 py-2 px-3 rounded-xl min-w-[48px] text-x-muted hover:text-x-text transition-colors"
+        <Link
+          to="/profile"
+          className="flex flex-col items-center gap-1 py-2 px-3 rounded-xl min-w-[48px] transition-colors"
         >
-          <Target size={22} strokeWidth={2} />
-          <span className="text-[10px] font-medium">Goals</span>
-        </button>
+          <img
+            src={
+              profile?.twitter_avatar ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.twitter_name ?? 'U')}&background=1d9bf0&color=fff&size=22`
+            }
+            alt="Profile"
+            className="w-[22px] h-[22px] rounded-full object-cover"
+          />
+          <span className="text-[10px] font-medium text-x-muted">Profile</span>
+        </Link>
       </nav>
     )
   }

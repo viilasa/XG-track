@@ -7,6 +7,7 @@ import { TodayPage } from '@/pages/TodayPage'
 import { InboxPage } from '@/pages/InboxPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { AchievementsPage } from '@/pages/AchievementsPage'
+import { ProfilePage } from '@/pages/ProfilePage'
 
 export default function App() {
   const { user, loading, authError, signIn } = useAuth()
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/achievements" element={<AchievementsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
