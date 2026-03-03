@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Headers', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS')
     return res.status(204).end()
   }
 
@@ -19,11 +19,13 @@ export default async function handler(req, res) {
   const qs = new URLSearchParams(queryParams).toString()
   const targetUrl = `${supabaseUrl}/${path}${qs ? `?${qs}` : ''}`
 
-  // Forward relevant headers — skip hop-by-hop and size headers
-  const skipHeaders = new Set(['host', 'connection', 'content-length', 'transfer-encoding'])
+  // Forward relevant headers — skip hop-by-hop headers
+  const skipReqHeaders = new Set([
+    'host', 'connection', 'content-length', 'transfer-encoding',
+  ])
   const headers = {}
   for (const [key, value] of Object.entries(req.headers)) {
-    if (skipHeaders.has(key)) continue
+    if (skipReqHeaders.has(key)) continue
     headers[key] = value
   }
 
@@ -40,18 +42,21 @@ export default async function handler(req, res) {
       body,
     })
 
-    // Forward response headers
-    const skipResHeaders = new Set(['transfer-encoding', 'connection', 'content-encoding'])
-    for (const [key, value] of response.headers.entries()) {
-      if (skipResHeaders.has(key)) continue
-      res.setHeader(key, value)
+    // Only forward safe response headers — skip anything that causes size mismatches
+    const safeResHeaders = [
+      'content-type', 'content-range', 'x-total-count',
+      'preference-applied', 'location', 'x-request-id',
+    ]
+    for (const h of safeResHeaders) {
+      const v = response.headers.get(h)
+      if (v) res.setHeader(h, v)
     }
 
     res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Expose-Headers', '*')
+    res.setHeader('Access-Control-Expose-Headers', 'content-range, x-total-count')
 
-    const data = await response.arrayBuffer()
-    res.status(response.status).send(Buffer.from(data))
+    const data = await response.text()
+    res.status(response.status).send(data)
   } catch (err) {
     console.error('[Supabase Proxy] Error:', err.message)
     res.status(502).json({ error: 'Proxy failed', message: err.message })
