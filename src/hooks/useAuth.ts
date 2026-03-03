@@ -75,11 +75,11 @@ export function useAuth() {
   useEffect(() => {
     const handleOAuthCallback = async () => {
       const params = new URLSearchParams(window.location.search)
-      const authHash = params.get('auth_hash')
+      const authCred = params.get('auth_cred')
       const authError = params.get('auth_error')
 
-      // Clean URL immediately so tokens don't linger
-      if (authHash || authError) {
+      // Clean URL immediately so credentials don't linger
+      if (authCred || authError) {
         window.history.replaceState({}, '', '/')
       }
 
@@ -88,30 +88,37 @@ export function useAuth() {
         return
       }
 
-      if (authHash) {
-        // This is a fetch call to supabase.co — NOT a browser redirect, so works on cellular
-        const { data, error } = await supabase.auth.verifyOtp({
-          token_hash: authHash,
-          type: 'email',
-        })
-        if (error) {
-          setState((prev) => ({ ...prev, loading: false, authError: error.message }))
-        } else if (data?.user) {
-          // Explicitly set session in case onAuthStateChange is slow to fire
+      if (authCred) {
+        try {
+          const { e: email, p: password } = JSON.parse(atob(authCred))
+          // signInWithPassword is a fetch call to supabase.co — not a browser redirect
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          })
+          if (error) {
+            setState((prev) => ({ ...prev, loading: false, authError: error.message }))
+          } else if (data?.user) {
+            setState((prev) => ({
+              ...prev,
+              user: data.user,
+              session: data.session,
+              loading: false,
+              authError: null,
+            }))
+            syncProfile(data.user)
+          } else {
+            setState((prev) => ({
+              ...prev,
+              loading: false,
+              authError: 'Sign in failed — no user returned',
+            }))
+          }
+        } catch {
           setState((prev) => ({
             ...prev,
-            user: data.user,
-            session: data.session,
             loading: false,
-            authError: null,
-          }))
-          syncProfile(data.user)
-        } else {
-          // verifyOtp returned no error and no user — unexpected
-          setState((prev) => ({
-            ...prev,
-            loading: false,
-            authError: `verifyOtp returned no user (data: ${JSON.stringify(data)})`,
+            authError: 'Failed to parse auth credentials',
           }))
         }
         return

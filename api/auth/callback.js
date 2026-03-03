@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { randomBytes } from 'crypto'
 
 export default async function handler(req, res) {
   const { code, state: stateParam, error: oauthError } = req.query
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
     const clientId = process.env.TWITTER_CLIENT_ID
     const clientSecret = process.env.TWITTER_CLIENT_SECRET
 
-    // 1. Exchange Twitter code for access token (server-side — never touches supabase.co in browser)
+    // 1. Exchange Twitter code for access token
     const tokenBody = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
     }
 
     // 3. Find or create the Supabase user
-    let userEmail
+    const derivedEmail = `${twitterUser.id}@xgtrack.twitter`
 
     // Check if user already has a profile (returning user)
     const { data: existingProfile } = await supabase
@@ -89,37 +90,58 @@ export default async function handler(req, res) {
       .eq('twitter_id', twitterUser.id)
       .single()
 
+    let userId
+    let userEmail
+
     if (existingProfile?.id) {
+      userId = existingProfile.id
       const { data: authUserData } = await supabase.auth.admin.getUserById(existingProfile.id)
-      userEmail = authUserData?.user?.email
+      userEmail = authUserData?.user?.email || derivedEmail
       await supabase.auth.admin.updateUserById(existingProfile.id, { user_metadata: userMeta })
     } else {
-      // New user — create with a derived email (Twitter rarely provides real email)
-      userEmail = `${twitterUser.id}@xgtrack.twitter`
-      const { error: createError } = await supabase.auth.admin.createUser({
+      userEmail = derivedEmail
+      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         email: userEmail,
         email_confirm: true,
+        password: randomBytes(32).toString('hex'), // initial random password
         user_metadata: userMeta,
       })
-      if (createError && !createError.message?.includes('already been registered')) {
-        console.error('[Auth] Create user failed:', createError)
-        return res.redirect('/?auth_error=create_user_failed')
+      if (createError) {
+        if (createError.message?.includes('already been registered')) {
+          // User exists with this email but no profile yet — find them
+          const { data: users } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+          const found = users?.users?.find(u => u.email === userEmail)
+          userId = found?.id
+        } else {
+          console.error('[Auth] Create user failed:', createError)
+          return res.redirect('/?auth_error=create_user_failed')
+        }
+      } else {
+        userId = newUser?.user?.id
       }
     }
 
-    // 4. Generate a one-time magic link token — client will verify via fetch, not browser redirect
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email: userEmail,
-    })
-
-    if (linkError || !linkData?.properties?.hashed_token) {
-      console.error('[Auth] Generate link failed:', linkError)
-      return res.redirect('/?auth_error=link_failed')
+    if (!userId) {
+      console.error('[Auth] Could not resolve user ID')
+      return res.redirect('/?auth_error=no_user_id')
     }
 
-    // 5. Send token to client — verifyOtp is a fetch call (not a browser redirect to supabase.co)
-    res.redirect(`/?auth_hash=${encodeURIComponent(linkData.properties.hashed_token)}`)
+    // 4. Set a one-time password and pass credentials to client
+    //    signInWithPassword is the most reliable Supabase auth method
+    const oneTimePass = randomBytes(32).toString('hex')
+    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+      password: oneTimePass,
+      user_metadata: userMeta,
+    })
+
+    if (updateError) {
+      console.error('[Auth] Update password failed:', updateError)
+      return res.redirect('/?auth_error=update_failed')
+    }
+
+    // 5. Redirect to app with credentials — client calls signInWithPassword (a fetch, not redirect)
+    const payload = Buffer.from(JSON.stringify({ e: userEmail, p: oneTimePass })).toString('base64')
+    res.redirect(`/?auth_cred=${encodeURIComponent(payload)}`)
   } catch (err) {
     console.error('[Auth] Unexpected error:', err.message)
     res.redirect('/?auth_error=server_error')
