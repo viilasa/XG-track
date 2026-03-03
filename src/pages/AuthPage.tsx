@@ -1,8 +1,9 @@
-import { useAuth } from '@/hooks/useAuth'
+interface AuthPageProps {
+  signIn: () => Promise<void>
+  authError: string | null
+}
 
-export function AuthPage() {
-  const { signIn, loading, authError } = useAuth()
-
+export function AuthPage({ signIn, authError }: AuthPageProps) {
   return (
     <div className="min-h-screen bg-x-bg flex">
       {/* Left — decorative */}
@@ -49,7 +50,6 @@ export function AuthPage() {
           <div className="space-y-3">
             <button
               onClick={signIn}
-              disabled={loading}
               className="w-full flex items-center justify-center gap-3 bg-x-text text-black font-bold py-3.5 rounded-full hover:bg-x-text/90 transition-colors disabled:opacity-50 text-lg"
             >
               <svg viewBox="0 0 24 24" className="w-5 h-5 fill-black" aria-hidden>
@@ -59,17 +59,13 @@ export function AuthPage() {
             </button>
 
             {authError && (
-              <p className="text-red-500 text-xs text-center px-4 break-words">
-                Error: {authError}
+              <p className="text-red-500 text-sm text-center px-4 py-2 bg-red-500/10 rounded-lg break-words">
+                {authError}
               </p>
             )}
 
             <p className="text-x-muted text-xs text-center leading-relaxed px-4">
               By signing in, you agree to grant XG Tracker read access to your X activity.
-            </p>
-
-            <p className="text-x-muted/50 text-[10px] text-center mt-4">
-              v4 | ls: {typeof window !== 'undefined' ? (localStorage.getItem('xg_auth_cred') ? 'HAS_CRED' : 'empty') : '?'}
             </p>
           </div>
         </div>

@@ -9,7 +9,7 @@ import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { AchievementsPage } from '@/pages/AchievementsPage'
 
 export default function App() {
-  const { user, loading } = useAuth()
+  const { user, loading, authError, signIn } = useAuth()
 
   if (loading) {
     return (
@@ -25,7 +25,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <AuthPage />
+    return <AuthPage signIn={signIn} authError={authError} />
   }
 
   return (
