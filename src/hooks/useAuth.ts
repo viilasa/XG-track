@@ -74,9 +74,14 @@ export function useAuth() {
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
+      // Check query params (for auth_error) and hash fragment (for auth_cred)
       const params = new URLSearchParams(window.location.search)
-      const authCred = params.get('auth_cred')
       const authError = params.get('auth_error')
+
+      // auth_cred comes via hash fragment (immune to server rewrites)
+      const hash = window.location.hash.replace('#', '')
+      const hashParams = new URLSearchParams(hash)
+      const authCred = hashParams.get('auth_cred')
 
       // Clean URL immediately so credentials don't linger
       if (authCred || authError) {

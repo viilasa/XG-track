@@ -139,9 +139,9 @@ export default async function handler(req, res) {
       return res.redirect('/?auth_error=update_failed')
     }
 
-    // 5. Redirect to app with credentials — client calls signInWithPassword (a fetch, not redirect)
+    // 5. Redirect to app with credentials via hash fragment (immune to server rewrites)
     const payload = Buffer.from(JSON.stringify({ e: userEmail, p: oneTimePass })).toString('base64')
-    res.redirect(`/?auth_cred=${encodeURIComponent(payload)}`)
+    res.redirect(`/#auth_cred=${encodeURIComponent(payload)}`)
   } catch (err) {
     console.error('[Auth] Unexpected error:', err.message)
     res.redirect('/?auth_error=server_error')
