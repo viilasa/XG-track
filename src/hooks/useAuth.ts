@@ -84,46 +84,8 @@ export function useAuth() {
         return
       }
 
-      // Check for session tokens in localStorage (set by /api/auth/callback HTML page)
-      // The server already signed in — we just set the session locally (NO fetch to supabase.co)
-      const authCred = localStorage.getItem('xg_auth_cred')
-      if (authCred) {
-        localStorage.removeItem('xg_auth_cred')
-        try {
-          const { access_token, refresh_token } = JSON.parse(atob(authCred))
-          const { data, error } = await supabase.auth.setSession({
-            access_token,
-            refresh_token,
-          })
-          if (error) {
-            setState((prev) => ({ ...prev, loading: false, authError: error.message }))
-          } else if (data?.user) {
-            setState((prev) => ({
-              ...prev,
-              user: data.user,
-              session: data.session,
-              loading: false,
-              authError: null,
-            }))
-            syncProfile(data.user)
-          } else {
-            setState((prev) => ({
-              ...prev,
-              loading: false,
-              authError: 'Sign in failed — no user returned',
-            }))
-          }
-        } catch (err) {
-          setState((prev) => ({
-            ...prev,
-            loading: false,
-            authError: `Auth parse error: ${err instanceof Error ? err.message : String(err)}`,
-          }))
-        }
-        return
-      }
-
-      // Normal session restore
+      // Session is written directly to Supabase's localStorage key by /api/auth/callback
+      // getSession() reads it from storage with no network call needed
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
           setState((prev) => ({ ...prev, user: session.user, session, loading: false }))

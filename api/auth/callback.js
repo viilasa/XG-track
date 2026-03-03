@@ -155,16 +155,17 @@ export default async function handler(req, res) {
       return res.redirect('/?auth_error=signin_failed')
     }
 
-    // 5. Store session tokens in localStorage via an intermediate HTML page
-    //    Client calls setSession() — no fetch to supabase.co needed
-    const payload = Buffer.from(JSON.stringify({
-      access_token: signInData.session.access_token,
-      refresh_token: signInData.session.refresh_token,
-    })).toString('base64')
+    // 5. Write session directly into Supabase's localStorage key
+    //    This way getSession() reads from storage — ZERO network calls to supabase.co
+    const projectRef = new URL(process.env.SUPABASE_URL).hostname.split('.')[0]
+    const storageKey = `sb-${projectRef}-auth-token`
+    const sessionJson = JSON.stringify(signInData.session)
+    // Escape for safe embedding in a JS string literal
+    const escaped = sessionJson.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
     res.setHeader('Content-Type', 'text/html')
     res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
       try {
-        localStorage.setItem('xg_auth_cred', '${payload}');
+        localStorage.setItem('${storageKey}', '${escaped}');
         window.location.replace('/');
       } catch(e) {
         document.body.textContent = 'Auth error: ' + e.message;
