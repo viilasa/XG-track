@@ -6,6 +6,7 @@ import type { Goal, DailyStat } from '@/types'
 interface ChallengeCardProps {
   goals: Goal
   recentStats: DailyStat[]
+  followersGained?: number | null
 }
 
 interface DayInfo {
@@ -20,7 +21,7 @@ interface DayInfo {
   stat: DailyStat | undefined
 }
 
-export function ChallengeCard({ goals, recentStats }: ChallengeCardProps) {
+export function ChallengeCard({ goals, recentStats, followersGained }: ChallengeCardProps) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
   if (!goals.goal_duration_days) return null
@@ -89,7 +90,21 @@ export function ChallengeCard({ goals, recentStats }: ChallengeCardProps) {
           <p className="text-x-muted text-xs uppercase tracking-wide font-medium">Challenge</p>
           <h3 className="text-x-text font-bold text-[15px]">{duration}-Day Goal Challenge</h3>
         </div>
-        <span className="text-2xl">🎯</span>
+        <div className="flex items-center gap-2">
+          {followersGained != null && (
+            <span className={clsx(
+              'text-xs font-semibold px-2 py-1 rounded-full',
+              followersGained > 0
+                ? 'bg-x-green/10 text-x-green'
+                : followersGained < 0
+                  ? 'bg-x-red/10 text-x-red'
+                  : 'bg-x-surface text-x-muted',
+            )}>
+              {followersGained >= 0 ? '+' : ''}{followersGained} 👥
+            </span>
+          )}
+          <span className="text-2xl">🎯</span>
+        </div>
       </div>
 
       {/* Day grid */}

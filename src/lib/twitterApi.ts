@@ -416,3 +416,39 @@ export async function fetchMentions(
     return []
   }
 }
+
+/**
+ * Fetch user profile info (followers count, etc.) from twitterapi.io
+ */
+export async function fetchUserInfo(
+  userName: string,
+): Promise<{ followersCount: number; followingCount: number } | null> {
+  try {
+    const raw = await apiFetch<{
+      status?: string
+      data?: {
+        followers_count?: number
+        followersCount?: number
+        following_count?: number
+        followingCount?: number
+        user_info?: {
+          followers_count?: number
+          followersCount?: number
+          following_count?: number
+          followingCount?: number
+        }
+      }
+    }>('/twitter/user/info', { userName })
+
+    const d = raw.data?.user_info ?? raw.data
+    if (!d) return null
+
+    return {
+      followersCount: d.followers_count ?? d.followersCount ?? 0,
+      followingCount: d.following_count ?? d.followingCount ?? 0,
+    }
+  } catch {
+    console.warn('[XG] fetchUserInfo failed')
+    return null
+  }
+}

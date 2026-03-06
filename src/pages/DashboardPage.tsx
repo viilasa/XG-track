@@ -1,12 +1,14 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { RefreshCw, ChevronRight } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format, subDays } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
 import { useGoals } from '@/hooks/useGoals'
 import { useStreaks } from '@/hooks/useStreaks'
 import { useDailyStats } from '@/hooks/useDailyStats'
 import { useTwitterData } from '@/hooks/useTwitterData'
 import { useSync } from '@/hooks/useSync'
+import { useFollowerSnapshots } from '@/hooks/useFollowerSnapshots'
 // import { useManualCounter } from '@/hooks/useManualCounter'
 import { StreakCard } from '@/components/ui/StreakCard'
 import { GoalProgress } from '@/components/ui/GoalProgress'
@@ -22,6 +24,16 @@ export function DashboardPage() {
   const { todayStats, recentStats } = useDailyStats(profile?.id)
   const { todayTweets, todayReplies, recentTweets: recentTweetsFull, dataAge, isLoading } = useTwitterData(profile?.id)
   const { forceSync, isSyncing } = useSync()
+
+  // Follower tracking period: challenge start or last 7 days
+  const followerPeriodStart = useMemo(() => {
+    if (goals?.goal_duration_days != null) {
+      const raw = goals.goal_started_at ?? goals.updated_at
+      return raw.slice(0, 10)
+    }
+    return format(subDays(new Date(), 6), 'yyyy-MM-dd')
+  }, [goals])
+  const { gained: followersGained, currentCount: followerCount } = useFollowerSnapshots(profile?.id, followerPeriodStart)
   // const { manualCount: manualReplies, incrementReply, incrementTweet } = useManualCounter(profile?.id)
 
   // Get manual tweets count from todayStats (commented out for now)
@@ -155,17 +167,25 @@ export function DashboardPage() {
 
         {/* 7-day (or N-day) challenge */}
         {goals && (goals.goal_duration_days != null) && (
-          <ChallengeCard goals={goals} recentStats={recentStats ?? []} />
+          <ChallengeCard goals={goals} recentStats={recentStats ?? []} followersGained={followersGained} />
         )}
 
-        {/* Weekly score + cleared */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Weekly score + cleared + followers */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <StatCard
             label="Weekly Score"
             value={streaks?.weekly_streak_score ?? 0}
             sub="goals met this week"
             icon="📊"
             color="blue"
+          />
+          <StatCard
+            label="Followers"
+            value={followerCount != null ? followerCount.toLocaleString() : '—'}
+            sub={followersGained != null ? `${followersGained >= 0 ? '+' : ''}${followersGained} this period` : 'sync to track'}
+            icon="👥"
+            color={followersGained != null && followersGained > 0 ? 'green' : 'muted'}
+            trend={followersGained != null ? (followersGained > 0 ? 'up' : followersGained < 0 ? 'down' : 'neutral') : undefined}
           />
           <StatCard
             label="Replies Cleared"

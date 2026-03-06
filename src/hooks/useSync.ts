@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { fetchAllTweets, fetchMentions } from '@/lib/twitterApi'
+import { fetchAllTweets, fetchMentions, fetchUserInfo } from '@/lib/twitterApi'
 import { format } from 'date-fns'
 import { calculateStreak, todayString } from '@/lib/streakUtils'
 import type { Profile } from '@/types'
@@ -237,19 +237,42 @@ export function useSync() {
         // ── Step 6: Update streaks for today ────────────────────────────────
         await updateStreaksIfNeeded(profile.id, todayReplyGoalMet, todayTweetGoalMet)
 
-        // ── Step 7: Update last_synced_at ───────────────────────────────────
+        // ── Step 7: Snapshot follower count ──────────────────────────────────
+        if (profile.twitter_username) {
+          try {
+            const userInfo = await fetchUserInfo(profile.twitter_username)
+            if (userInfo && userInfo.followersCount > 0) {
+              await supabase.from('follower_snapshots').upsert(
+                {
+                  user_id: profile.id,
+                  followers_count: userInfo.followersCount,
+                  date: today,
+                },
+                { onConflict: 'user_id,date' },
+              )
+              if (import.meta.env.DEV) {
+                console.log(`[XG] Follower snapshot: ${userInfo.followersCount}`)
+              }
+            }
+          } catch {
+            console.warn('[XG] Follower snapshot failed (non-fatal)')
+          }
+        }
+
+        // ── Step 8: Update last_synced_at ───────────────────────────────────
         await supabase
           .from('profiles')
           .update({ last_synced_at: new Date().toISOString() })
           .eq('id', profile.id)
 
-        // ── Step 8: Invalidate all React Query caches ───────────────────────
+        // ── Step 9: Invalidate all React Query caches ───────────────────────
         qc.invalidateQueries({ queryKey: ['cached-tweets'] })
         qc.invalidateQueries({ queryKey: ['received-tweets'] })
         qc.invalidateQueries({ queryKey: ['daily-stats'] })
         qc.invalidateQueries({ queryKey: ['recent-stats'] })
         qc.invalidateQueries({ queryKey: ['streaks'] })
         qc.invalidateQueries({ queryKey: ['user-badges'] })
+        qc.invalidateQueries({ queryKey: ['follower-snapshots'] })
       } catch (err) {
         console.error('[XG] Sync failed:', err)
       } finally {
