@@ -87,7 +87,7 @@ export interface Badge {
   name: string
   description: string
   icon: string
-  category: 'reply_streak' | 'tweet_streak' | 'inbox'
+  category: 'reply_streak' | 'tweet_streak' | 'inbox' | 'goal'
   threshold: number
 }
 

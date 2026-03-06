@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { fetchAllTweets, fetchMentions, fetchUserInfo } from '@/lib/twitterApi'
-import { format } from 'date-fns'
+import { format, differenceInDays, parseISO } from 'date-fns'
 import { calculateStreak, todayString } from '@/lib/streakUtils'
 import type { Profile } from '@/types'
 
@@ -131,7 +131,7 @@ export function useSync() {
         // Get goals (needed for all days)
         const { data: goals } = await supabase
           .from('goals')
-          .select('replies_per_day, tweets_per_day, track_replies, track_tweets, goal_started_at')
+          .select('replies_per_day, tweets_per_day, track_replies, track_tweets, goal_started_at, goal_duration_days')
           .eq('user_id', profile.id)
           .maybeSingle()
 
@@ -236,6 +236,19 @@ export function useSync() {
 
         // ── Step 6: Update streaks for today ────────────────────────────────
         await updateStreaksIfNeeded(profile.id, todayReplyGoalMet, todayTweetGoalMet)
+
+        // ── Step 6.5: Check if active challenge just completed ────────────
+        if (goals?.goal_duration_days && goals?.goal_started_at) {
+          const startDate = parseISO(goals.goal_started_at.slice(0, 10))
+          const elapsed = differenceInDays(new Date(), startDate)
+          if (elapsed >= goals.goal_duration_days) {
+            try {
+              await archiveChallengeAndAwardGoalBadges(profile.id, goals)
+            } catch {
+              console.warn('[XG] Challenge completion check failed (non-fatal)')
+            }
+          }
+        }
 
         // ── Step 7: Snapshot follower count ──────────────────────────────────
         if (profile.twitter_username) {
@@ -467,5 +480,85 @@ async function updateStreaksIfNeeded(
         .from('user_badges')
         .upsert({ user_id: userId, badge_id: b.id }, { onConflict: 'user_id,badge_id' })
     }
+  }
+}
+
+// ─── Challenge completion + goal badges ──────────────────────────────────────
+
+async function archiveChallengeAndAwardGoalBadges(
+  userId: string,
+  goals: { replies_per_day: number; tweets_per_day: number; track_replies: boolean; track_tweets: boolean; goal_started_at: string; goal_duration_days: number },
+) {
+  // Check if already archived (avoid duplicates)
+  const { count: alreadyArchived } = await supabase
+    .from('goal_history')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('goal_started_at', goals.goal_started_at)
+
+  if ((alreadyArchived ?? 0) > 0) return // already processed
+
+  // Count days completed during this challenge
+  const startDate = goals.goal_started_at.slice(0, 10)
+  const { data: stats } = await supabase
+    .from('daily_stats')
+    .select('goal_replies_met, goal_tweets_met')
+    .eq('user_id', userId)
+    .gte('date', startDate)
+
+  let daysCompleted = 0
+  for (const s of stats ?? []) {
+    let met = false
+    if (goals.track_replies && goals.track_tweets) {
+      met = (s.goal_replies_met ?? false) && (s.goal_tweets_met ?? false)
+    } else if (goals.track_replies) {
+      met = s.goal_replies_met ?? false
+    } else if (goals.track_tweets) {
+      met = s.goal_tweets_met ?? false
+    }
+    if (met) daysCompleted++
+  }
+
+  // Archive to goal_history
+  await supabase.from('goal_history').insert({
+    user_id: userId,
+    replies_per_day: goals.replies_per_day,
+    tweets_per_day: goals.tweets_per_day,
+    goal_duration_days: goals.goal_duration_days,
+    goal_started_at: goals.goal_started_at,
+    track_replies: goals.track_replies,
+    track_tweets: goals.track_tweets,
+    days_completed: daysCompleted,
+    total_days: goals.goal_duration_days,
+    ended_reason: 'completed',
+  })
+
+  // Count total completed goals
+  const { count: totalCompleted } = await supabase
+    .from('goal_history')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('ended_reason', 'completed')
+
+  const completed = totalCompleted ?? 0
+
+  // Award goal badges
+  const goalBadges: Array<{ id: string; met: boolean }> = [
+    { id: 'goal_first', met: completed >= 1 },
+    { id: 'goal_3', met: completed >= 3 },
+    { id: 'goal_10', met: completed >= 10 },
+    { id: 'goal_perfect', met: daysCompleted >= goals.goal_duration_days },
+  ]
+
+  for (const b of goalBadges) {
+    if (b.met) {
+      await supabase
+        .from('user_badges')
+        .upsert({ user_id: userId, badge_id: b.id }, { onConflict: 'user_id,badge_id' })
+    }
+  }
+
+  if (import.meta.env.DEV) {
+    console.log(`[XG] Challenge completed! ${daysCompleted}/${goals.goal_duration_days} days. Badges awarded.`)
   }
 }
