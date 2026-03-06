@@ -137,7 +137,7 @@ export function Sidebar({ profile, onSignOut, onSetGoals, variant = 'desktop' }:
             <span className="text-base hidden xl:block">Sign out</span>
           </button>
 
-          <div className="flex items-center gap-3 px-3 py-3 rounded-full hover:bg-x-surface transition-colors cursor-pointer">
+          <Link to="/profile" className="flex items-center gap-3 px-3 py-3 rounded-full hover:bg-x-surface transition-colors cursor-pointer">
             <img
               src={profile.twitter_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.twitter_name ?? 'U')}&background=1d9bf0&color=fff&size=40`}
               alt={profile.twitter_name ?? 'User'}
@@ -147,7 +147,7 @@ export function Sidebar({ profile, onSignOut, onSetGoals, variant = 'desktop' }:
               <p className="text-x-text font-bold text-sm truncate">{profile.twitter_name}</p>
               <p className="text-x-muted text-sm truncate">@{profile.twitter_username}</p>
             </div>
-          </div>
+          </Link>
         </div>
       )}
     </aside>
