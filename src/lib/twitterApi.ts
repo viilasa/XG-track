@@ -418,37 +418,67 @@ export async function fetchMentions(
 }
 
 /**
- * Fetch user profile info (followers count, etc.) from twitterapi.io
+ * Fetch user profile info (followers count, etc.)
+ * PRIMARY: Official X API v2 GET /2/users/by/username/:username
+ * FALLBACK: twitterapi.io /twitter/user/info
  */
 export async function fetchUserInfo(
   userName: string,
 ): Promise<{ followersCount: number; followingCount: number } | null> {
+  // Official X API v2
+  if (X_BEARER_TOKEN) {
+    try {
+      const raw = await officialApiFetch<{
+        data?: {
+          id: string
+          name: string
+          username: string
+          public_metrics?: {
+            followers_count: number
+            following_count: number
+            tweet_count: number
+            listed_count: number
+          }
+        }
+      }>(`/2/users/by/username/${userName}`, {
+        'user.fields': 'public_metrics',
+      })
+
+      if (raw.data?.public_metrics) {
+        if (import.meta.env.DEV) {
+          console.log('[XG] fetchUserInfo:', raw.data.public_metrics)
+        }
+        return {
+          followersCount: raw.data.public_metrics.followers_count,
+          followingCount: raw.data.public_metrics.following_count,
+        }
+      }
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.warn('[XG] fetchUserInfo official API failed:', err)
+      }
+    }
+  }
+
+  // Fallback: twitterapi.io
   try {
     const raw = await apiFetch<{
       status?: string
       data?: {
-        followers_count?: number
-        followersCount?: number
-        following_count?: number
-        followingCount?: number
-        user_info?: {
-          followers_count?: number
-          followersCount?: number
-          following_count?: number
-          followingCount?: number
-        }
+        followers?: number
+        following?: number
       }
     }>('/twitter/user/info', { userName })
 
-    const d = raw.data?.user_info ?? raw.data
-    if (!d) return null
-
-    return {
-      followersCount: d.followers_count ?? d.followersCount ?? 0,
-      followingCount: d.following_count ?? d.followingCount ?? 0,
+    if (raw.data) {
+      return {
+        followersCount: raw.data.followers ?? 0,
+        followingCount: raw.data.following ?? 0,
+      }
     }
   } catch {
-    console.warn('[XG] fetchUserInfo failed')
-    return null
+    console.warn('[XG] fetchUserInfo fallback failed')
   }
+
+  return null
 }
