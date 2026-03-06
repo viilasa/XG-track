@@ -3,6 +3,7 @@ import { RefreshCw, CheckCheck } from 'lucide-react'
 import { formatDistanceToNow, format, subDays } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
 import { useGoals } from '@/hooks/useGoals'
+import { useDailyStats } from '@/hooks/useDailyStats'
 import { useInboxTweets } from '@/hooks/useTwitterData'
 import { useSync } from '@/hooks/useSync'
 import { ReceivedTweetCard } from '@/components/ui/TweetCard'
@@ -12,6 +13,7 @@ export function InboxPage() {
   const { profile, refreshProfile } = useAuth()
   const { goals } = useGoals(profile?.id)
   const { forceSync, isSyncing } = useSync()
+  const { clearReply } = useDailyStats(profile?.id)
   const [filter, setFilter] = useState<InboxFilter>('pending')
 
   // Determine the start of the current goal period
@@ -137,7 +139,11 @@ export function InboxPage() {
       ) : (
         <div>
           {filtered.map((tweet) => (
-            <ReceivedTweetCard key={tweet.id} tweet={tweet} />
+            <ReceivedTweetCard
+              key={tweet.id}
+              tweet={tweet}
+              onClear={(tweetDbId) => clearReply.mutate(tweetDbId)}
+            />
           ))}
         </div>
       )}

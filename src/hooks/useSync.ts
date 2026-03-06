@@ -2,7 +2,8 @@ import { useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { fetchAllTweets, fetchMentions } from '@/lib/twitterApi'
-import { calculateStreak, todayString, todayBoundsUTC } from '@/lib/streakUtils'
+import { format } from 'date-fns'
+import { calculateStreak, todayString } from '@/lib/streakUtils'
 import type { Profile } from '@/types'
 
 const SYNC_COOLDOWN_MS = 5 * 60 * 1000 // 5 minutes
@@ -122,49 +123,12 @@ export function useSync() {
           }
         }
 
-        // ── Step 4: Recount today's stats from DB ───────────────────────────
+        // ── Step 4: Recount stats for today AND recent past days ─────────────
+        // This ensures that if you sync after midnight, yesterday's data
+        // (tweeted before midnight) is still counted and streaks are preserved.
         const today = todayString()
-        const { start: todayStart, end: todayEnd } = todayBoundsUTC()
 
-        const { count: tweetsCount } = await supabase
-          .from('tweets_cache')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', profile.id)
-          .eq('is_reply', false)
-          .gte('created_at_twitter', todayStart)
-          .lte('created_at_twitter', todayEnd)
-
-        const { count: repliesCount } = await supabase
-          .from('tweets_cache')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', profile.id)
-          .eq('is_reply', true)
-          .gte('created_at_twitter', todayStart)
-          .lte('created_at_twitter', todayEnd)
-
-        const { count: receivedCount } = await supabase
-          .from('received_tweets')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', profile.id)
-          .gte('created_at_twitter', todayStart)
-          .lte('created_at_twitter', todayEnd)
-
-        // Count cleared received tweets (auto-cleared when user replied)
-        const { count: clearedCount } = await supabase
-          .from('received_tweets')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', profile.id)
-          .eq('is_cleared', true)
-          .gte('created_at_twitter', todayStart)
-          .lte('created_at_twitter', todayEnd)
-
-        const tweets = tweetsCount ?? 0
-        const replies = repliesCount ?? 0
-        const received = receivedCount ?? 0
-        const cleared = clearedCount ?? 0
-
-        // ── Step 5: Upsert daily_stats ──────────────────────────────────────
-        // Get goals to check completion
+        // Get goals (needed for all days)
         const { data: goals } = await supabase
           .from('goals')
           .select('replies_per_day, tweets_per_day, track_replies, track_tweets')
@@ -175,31 +139,103 @@ export function useSync() {
         const trackTweets = goals?.track_tweets ?? true
         const replyGoal = goals?.replies_per_day ?? 5
         const tweetGoal = goals?.tweets_per_day ?? 3
-        const replyGoalMet = trackReplies ? replies >= replyGoal : false
-        const tweetGoalMet = trackTweets ? tweets >= tweetGoal : false
 
-        const statsRow = {
-          user_id: profile.id,
-          date: today,
-          replies_sent: replies,
-          tweets_posted: tweets,
-          replies_received: received,
-          replies_cleared: cleared,
-          goal_replies_met: replyGoalMet,
-          goal_tweets_met: tweetGoalMet,
-          updated_at: new Date().toISOString(),
+        // Build list of days to recount: past days first (oldest→newest), then today
+        // Processing oldest first ensures streak calculations build correctly
+        const daysToRecount: string[] = []
+        for (let i = 2; i >= 0; i--) {
+          const d = new Date()
+          d.setDate(d.getDate() - i)
+          daysToRecount.push(format(d, 'yyyy-MM-dd'))
         }
 
-        const { error: upsertError } = await supabase
-          .from('daily_stats')
-          .upsert(statsRow, { onConflict: 'user_id,date' })
+        let todayReplyGoalMet = false
+        let todayTweetGoalMet = false
 
-        if (upsertError) {
-          console.error('[XG] daily_stats upsert failed:', upsertError.message)
+        for (const day of daysToRecount) {
+          const dayDate = new Date(day + 'T00:00:00')
+          const dayStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 0, 0, 0, 0).toISOString()
+          const dayEnd = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 23, 59, 59, 999).toISOString()
+
+          const { count: tweetsCount } = await supabase
+            .from('tweets_cache')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', profile.id)
+            .eq('is_reply', false)
+            .gte('created_at_twitter', dayStart)
+            .lte('created_at_twitter', dayEnd)
+
+          const { count: repliesCount } = await supabase
+            .from('tweets_cache')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', profile.id)
+            .eq('is_reply', true)
+            .gte('created_at_twitter', dayStart)
+            .lte('created_at_twitter', dayEnd)
+
+          const { count: receivedCount } = await supabase
+            .from('received_tweets')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', profile.id)
+            .gte('created_at_twitter', dayStart)
+            .lte('created_at_twitter', dayEnd)
+
+          const { count: clearedCount } = await supabase
+            .from('received_tweets')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', profile.id)
+            .eq('is_cleared', true)
+            .gte('created_at_twitter', dayStart)
+            .lte('created_at_twitter', dayEnd)
+
+          const tweets = tweetsCount ?? 0
+          const replies = repliesCount ?? 0
+          const received = receivedCount ?? 0
+          const cleared = clearedCount ?? 0
+
+          // Skip past days that have zero activity (no tweets in cache)
+          if (day !== today && tweets === 0 && replies === 0 && received === 0) {
+            continue
+          }
+
+          const replyGoalMet = trackReplies ? replies >= replyGoal : false
+          const tweetGoalMet = trackTweets ? tweets >= tweetGoal : false
+
+          if (day === today) {
+            todayReplyGoalMet = replyGoalMet
+            todayTweetGoalMet = tweetGoalMet
+          }
+
+          const statsRow = {
+            user_id: profile.id,
+            date: day,
+            replies_sent: replies,
+            tweets_posted: tweets,
+            replies_received: received,
+            replies_cleared: cleared,
+            goal_replies_met: replyGoalMet,
+            goal_tweets_met: tweetGoalMet,
+            updated_at: new Date().toISOString(),
+          }
+
+          const { error: upsertError } = await supabase
+            .from('daily_stats')
+            .upsert(statsRow, { onConflict: 'user_id,date' })
+
+          if (upsertError) {
+            console.error(`[XG] daily_stats upsert failed for ${day}:`, upsertError.message)
+          } else if (import.meta.env.DEV) {
+            console.log(`[XG] daily_stats upserted for ${day}: ${replies} replies, ${tweets} tweets`)
+          }
+
+          // Update streaks for past days too (so yesterday's goal counts)
+          if (day !== today && (replyGoalMet || tweetGoalMet)) {
+            await updateStreaksForDate(profile.id, replyGoalMet, tweetGoalMet, day)
+          }
         }
 
-        // ── Step 6: Update streaks if goals met ─────────────────────────────
-        await updateStreaksIfNeeded(profile.id, replyGoalMet, tweetGoalMet)
+        // ── Step 6: Update streaks for today ────────────────────────────────
+        await updateStreaksIfNeeded(profile.id, todayReplyGoalMet, todayTweetGoalMet)
 
         // ── Step 7: Update last_synced_at ───────────────────────────────────
         await supabase
@@ -232,6 +268,66 @@ export function useSync() {
 }
 
 // ─── Streak update helper ────────────────────────────────────────────────────
+
+/**
+ * Update streaks for a past date (e.g. yesterday).
+ * Processes dates in chronological order so streak calculation is correct.
+ */
+async function updateStreaksForDate(
+  userId: string,
+  replyGoalMet: boolean,
+  tweetGoalMet: boolean,
+  dateStr: string,
+) {
+  if (!replyGoalMet && !tweetGoalMet) return
+
+  const { data: current } = await supabase
+    .from('streaks')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  let replyStreak = current?.current_reply_streak ?? 0
+  let tweetStreak = current?.current_tweet_streak ?? 0
+  let engStreak = current?.current_engagement_streak ?? 0
+  let lastReplyDate = current?.last_reply_date ?? null
+  let lastTweetDate = current?.last_tweet_date ?? null
+
+  // Only update if this date hasn't been processed yet
+  // (avoid double-counting if last_*_date is already >= dateStr)
+  if (replyGoalMet && (!lastReplyDate || lastReplyDate < dateStr)) {
+    replyStreak = calculateStreak(lastReplyDate, replyStreak, dateStr)
+    lastReplyDate = dateStr
+  }
+
+  if (tweetGoalMet && (!lastTweetDate || lastTweetDate < dateStr)) {
+    tweetStreak = calculateStreak(lastTweetDate, tweetStreak, dateStr)
+    lastTweetDate = dateStr
+  }
+
+  if (replyGoalMet && tweetGoalMet) {
+    const lastEngDate = current?.last_reply_date ?? null
+    if (!lastEngDate || lastEngDate < dateStr) {
+      engStreak = calculateStreak(lastEngDate, engStreak, dateStr)
+    }
+  }
+
+  await supabase.from('streaks').upsert(
+    {
+      user_id: userId,
+      current_reply_streak: replyStreak,
+      current_tweet_streak: tweetStreak,
+      current_engagement_streak: engStreak,
+      longest_reply_streak: Math.max(current?.longest_reply_streak ?? 0, replyStreak),
+      longest_tweet_streak: Math.max(current?.longest_tweet_streak ?? 0, tweetStreak),
+      longest_engagement_streak: Math.max(current?.longest_engagement_streak ?? 0, engStreak),
+      last_reply_date: lastReplyDate,
+      last_tweet_date: lastTweetDate,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  )
+}
 
 async function updateStreaksIfNeeded(
   userId: string,

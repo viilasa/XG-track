@@ -117,9 +117,10 @@ export function TweetCard({ tweet, variant = 'default', onClear, isCleared }: Tw
 
 interface ReceivedTweetCardProps {
   tweet: ReceivedTweet
+  onClear?: (tweetDbId: string) => void
 }
 
-export function ReceivedTweetCard({ tweet }: ReceivedTweetCardProps) {
+export function ReceivedTweetCard({ tweet, onClear }: ReceivedTweetCardProps) {
   const timeAgo = formatDistanceToNow(new Date(tweet.created_at_twitter), { addSuffix: true })
 
   return (
@@ -151,7 +152,7 @@ export function ReceivedTweetCard({ tweet }: ReceivedTweetCardProps) {
           {tweet.is_cleared && (
             <span className="ml-auto flex items-center gap-1 text-x-green text-xs bg-x-green/10 px-2 py-0.5 rounded-full">
               <CheckCircle2 size={12} />
-              Replied
+              Cleared
             </span>
           )}
         </div>
@@ -159,6 +160,38 @@ export function ReceivedTweetCard({ tweet }: ReceivedTweetCardProps) {
         <p className="text-x-text text-[15px] mt-1 leading-relaxed break-words">
           {tweet.tweet_text}
         </p>
+
+        {/* Action buttons for pending tweets */}
+        {!tweet.is_cleared && onClear && (
+          <div className="flex items-center gap-3 mt-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onClear(tweet.id)
+              }}
+              className="flex items-center gap-1.5 text-x-muted hover:text-pink-500 group transition-colors text-sm"
+              title="Like & clear from inbox"
+            >
+              <span className="p-1.5 rounded-full group-hover:bg-pink-500/10 transition-colors">
+                <Heart size={16} />
+              </span>
+              <span>Like</span>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onClear(tweet.id)
+              }}
+              className="flex items-center gap-1.5 text-x-muted hover:text-x-green group transition-colors text-sm"
+              title="Mark as cleared"
+            >
+              <span className="p-1.5 rounded-full group-hover:bg-x-green/10 transition-colors">
+                <CheckCircle2 size={16} />
+              </span>
+              <span>Clear</span>
+            </button>
+          </div>
+        )}
       </div>
     </article>
   )
