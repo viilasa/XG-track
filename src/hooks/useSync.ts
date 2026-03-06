@@ -131,7 +131,7 @@ export function useSync() {
         // Get goals (needed for all days)
         const { data: goals } = await supabase
           .from('goals')
-          .select('replies_per_day, tweets_per_day, track_replies, track_tweets')
+          .select('replies_per_day, tweets_per_day, track_replies, track_tweets, goal_started_at')
           .eq('user_id', profile.id)
           .maybeSingle()
 
@@ -242,6 +242,35 @@ export function useSync() {
           try {
             const userInfo = await fetchUserInfo(profile.twitter_username)
             if (userInfo && userInfo.followersCount > 0) {
+              // Check if this is the first-ever snapshot for this user
+              const { count: existingCount } = await supabase
+                .from('follower_snapshots')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', profile.id)
+
+              // If no snapshots exist yet, backfill a baseline at the challenge
+              // start date (or 7 days ago) so "followers gained" works immediately
+              if ((existingCount ?? 0) === 0 && goals) {
+                const challengeStart = goals.goal_started_at
+                  ? goals.goal_started_at.slice(0, 10)
+                  : null
+
+                if (challengeStart && challengeStart < today) {
+                  await supabase.from('follower_snapshots').upsert(
+                    {
+                      user_id: profile.id,
+                      followers_count: userInfo.followersCount,
+                      date: challengeStart,
+                    },
+                    { onConflict: 'user_id,date' },
+                  )
+                  if (import.meta.env.DEV) {
+                    console.log(`[XG] Follower baseline backfilled at ${challengeStart}: ${userInfo.followersCount}`)
+                  }
+                }
+              }
+
+              // Always upsert today's snapshot
               await supabase.from('follower_snapshots').upsert(
                 {
                   user_id: profile.id,
