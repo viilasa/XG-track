@@ -6,6 +6,7 @@ export function useGoalHistory(userId: string | undefined) {
   const { data: history, isLoading } = useQuery({
     queryKey: ['goal_history', userId],
     enabled: !!userId,
+    retry: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('goal_history')
@@ -13,7 +14,8 @@ export function useGoalHistory(userId: string | undefined) {
         .eq('user_id', userId!)
         .order('ended_at', { ascending: false })
 
-      if (error) throw error
+      // Table might not exist yet — return empty instead of crashing
+      if (error) return []
       return (data ?? []) as GoalHistory[]
     },
   })

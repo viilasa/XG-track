@@ -29,6 +29,7 @@ async function archiveGoalToHistory(currentGoal: Goal, reason: 'completed' | 're
     if (met) daysCompleted++
   }
 
+  // Silently skip if table doesn't exist yet
   await supabase.from('goal_history').insert({
     user_id: currentGoal.user_id,
     replies_per_day: currentGoal.replies_per_day,
@@ -84,8 +85,9 @@ export function useGoals(userId: string | undefined) {
       track_tweets?: boolean
     }) => {
       // Archive the current goal to history if it had a duration challenge
+      // Wrapped in try-catch so it doesn't block saving if table doesn't exist
       if (goals?.id && goals.goal_duration_days) {
-        await archiveGoalToHistory(goals, 'replaced')
+        try { await archiveGoalToHistory(goals, 'replaced') } catch { /* ignore */ }
       }
 
       // Set goal_started_at when a duration is chosen (starts the challenge clock)
