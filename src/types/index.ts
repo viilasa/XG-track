@@ -26,6 +26,24 @@ export interface Goal {
   updated_at: string
 }
 
+// ─── Goal History ────────────────────────────────────────────────────────────
+
+export interface GoalHistory {
+  id: string
+  user_id: string
+  replies_per_day: number
+  tweets_per_day: number
+  goal_duration_days: number | null
+  goal_started_at: string | null
+  track_replies: boolean
+  track_tweets: boolean
+  days_completed: number
+  total_days: number
+  ended_at: string
+  ended_reason: 'completed' | 'replaced' | 'abandoned'
+  created_at: string
+}
+
 // ─── Daily Stats ─────────────────────────────────────────────────────────────
 
 export interface DailyStat {

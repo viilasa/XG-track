@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { X, Check } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { X, Check, AlertTriangle } from 'lucide-react'
+import { differenceInDays, parseISO } from 'date-fns'
 import type { Goal } from '@/types'
 
 interface GoalModalProps {
@@ -33,6 +34,16 @@ export function GoalModal({ open, onClose, current, onSave, isSaving }: GoalModa
   const [trackReplies, setTrackReplies] = useState(current?.track_replies ?? true)
   const [trackTweets, setTrackTweets] = useState(current?.track_tweets ?? true)
 
+  // Check if there's an active (incomplete) challenge
+  const activeChallengeInfo = useMemo(() => {
+    if (!current?.goal_duration_days || !current?.goal_started_at) return null
+    const startDate = parseISO(current.goal_started_at.slice(0, 10))
+    const elapsed = differenceInDays(new Date(), startDate)
+    const remaining = current.goal_duration_days - elapsed
+    if (remaining <= 0) return null // challenge is over
+    return { elapsed, remaining, duration: current.goal_duration_days }
+  }, [current])
+
   useEffect(() => {
     if (open) {
       setReplies(current?.replies_per_day ?? 5)
@@ -53,7 +64,7 @@ export function GoalModal({ open, onClose, current, onSave, isSaving }: GoalModa
     })
   }
 
-  const canSave = trackReplies || trackTweets
+  const canSave = (trackReplies || trackTweets) && !activeChallengeInfo
 
   if (!open) return null
 
@@ -80,6 +91,24 @@ export function GoalModal({ open, onClose, current, onSave, isSaving }: GoalModa
 
         {/* Body */}
         <div className="p-5 space-y-6">
+          {/* Active challenge warning */}
+          {activeChallengeInfo && (
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-orange-400 flex-shrink-0" />
+                <p className="text-orange-400 font-semibold text-sm">
+                  Active Challenge in Progress
+                </p>
+              </div>
+              <p className="text-x-muted text-xs leading-relaxed">
+                You have a {activeChallengeInfo.duration}-day challenge running with{' '}
+                <span className="text-x-text font-medium">{activeChallengeInfo.remaining} day{activeChallengeInfo.remaining !== 1 ? 's' : ''} remaining</span>.
+                Changing goals now will overwrite your current challenge progress.
+                Complete or wait for it to end first.
+              </p>
+            </div>
+          )}
+
           {/* Which goals to track — checkboxes */}
           <div className="space-y-3">
             <label className="text-x-text font-semibold block">
@@ -232,7 +261,7 @@ export function GoalModal({ open, onClose, current, onSave, isSaving }: GoalModa
             disabled={isSaving || !canSave}
             className="flex-1 py-2.5 rounded-full bg-x-blue text-white font-bold hover:bg-x-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving ? 'Saving...' : 'Save Goals'}
+            {isSaving ? 'Saving...' : activeChallengeInfo ? 'Challenge Active' : 'Save Goals'}
           </button>
         </div>
       </div>
