@@ -1,29 +1,33 @@
-import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { RefreshCw, ChevronRight } from 'lucide-react'
+import { useMemo, useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { RefreshCw, ChevronRight, Plus } from 'lucide-react'
 import { formatDistanceToNow, format, subDays } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
-import { useGoals } from '@/hooks/useGoals'
+import { useGoals, calculateGoalCompletion } from '@/hooks/useGoals'
 import { useStreaks } from '@/hooks/useStreaks'
 import { useDailyStats } from '@/hooks/useDailyStats'
 import { useTwitterData } from '@/hooks/useTwitterData'
 import { useSync } from '@/hooks/useSync'
 import { useFollowerSnapshots } from '@/hooks/useFollowerSnapshots'
-// import { useManualCounter } from '@/hooks/useManualCounter'
 import { StreakCard } from '@/components/ui/StreakCard'
 import { GoalProgress } from '@/components/ui/GoalProgress'
 import { StatCard } from '@/components/ui/StatCard'
 import { CachedTweetCard } from '@/components/ui/TweetCard'
 import { ChallengeCard } from '@/components/ui/ChallengeCard'
-// import { ManualCounter } from '@/components/ui/ManualCounter'
+import { GoalCompletionModal } from '@/components/ui/GoalCompletionModal'
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const { profile, refreshProfile } = useAuth()
-  const { goals } = useGoals(profile?.id)
+  const { goals, completeGoal } = useGoals(profile?.id)
   const { streaks } = useStreaks(profile?.id)
   const { todayStats, recentStats } = useDailyStats(profile?.id)
   const { todayTweets, todayReplies, recentTweets: recentTweetsFull, dataAge, isLoading } = useTwitterData(profile?.id)
   const { forceSync, isSyncing } = useSync()
+
+  // Goal completion state
+  const [showCompletionModal, setShowCompletionModal] = useState(false)
+  const [hasShownCompletion, setHasShownCompletion] = useState(false)
 
   // Follower tracking period: challenge start or last 7 days
   const followerPeriodStart = useMemo(() => {
@@ -34,15 +38,34 @@ export function DashboardPage() {
     return format(subDays(new Date(), 6), 'yyyy-MM-dd')
   }, [goals])
   const { gained: followersGained, currentCount: followerCount } = useFollowerSnapshots(profile?.id, followerPeriodStart)
-  // const { manualCount: manualReplies, incrementReply, incrementTweet } = useManualCounter(profile?.id)
 
-  // Get manual tweets count from todayStats (commented out for now)
-  // const manualTweets = todayStats?.manual_tweets ?? 0
+  // Check if goal challenge is complete
+  const goalCompletion = useMemo(() => {
+    return calculateGoalCompletion(goals, recentStats)
+  }, [goals, recentStats])
+
+  // Show completion modal when goal is complete
+  useEffect(() => {
+    if (goalCompletion.isComplete && goals?.goal_duration_days && !hasShownCompletion) {
+      setShowCompletionModal(true)
+      setHasShownCompletion(true)
+    }
+  }, [goalCompletion.isComplete, goals?.goal_duration_days, hasShownCompletion])
 
   const handleSync = async () => {
     if (!profile) return
     await forceSync(profile)
     refreshProfile()
+  }
+
+  const handleCompleteGoal = async () => {
+    await completeGoal.mutateAsync(goalCompletion.daysCompleted)
+    setShowCompletionModal(false)
+  }
+
+  const handleCreateNewGoal = () => {
+    setShowCompletionModal(false)
+    navigate('/goals')
   }
 
   const lastSynced = profile?.last_synced_at
@@ -166,8 +189,32 @@ export function DashboardPage() {
         </section>
 
         {/* 7-day (or N-day) challenge */}
-        {goals && (goals.goal_duration_days != null) && (
+        {goals && (goals.goal_duration_days != null) && !goalCompletion.isComplete && (
           <ChallengeCard goals={goals} recentStats={recentStats ?? []} followersGained={followersGained} />
+        )}
+
+        {/* No active challenge - prompt to create one */}
+        {(!goals?.goal_duration_days || goalCompletion.isComplete) && (
+          <section className="bg-x-card border border-x-border rounded-2xl p-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-x-blue/10 flex items-center justify-center mx-auto mb-4">
+              <Plus className="text-x-blue" size={32} />
+            </div>
+            <h3 className="text-x-text font-bold text-lg mb-2">
+              {goalCompletion.isComplete ? 'Challenge Complete!' : 'No Active Challenge'}
+            </h3>
+            <p className="text-x-muted text-sm mb-4">
+              {goalCompletion.isComplete 
+                ? 'Great work! Start a new challenge to keep the momentum going.'
+                : 'Set a goal challenge to track your progress over time.'}
+            </p>
+            <Link
+              to="/goals"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-x-blue text-white font-bold hover:bg-x-blue/90 transition-colors"
+            >
+              <Plus size={18} />
+              Create New Challenge
+            </Link>
+          </section>
         )}
 
         {/* Weekly score + cleared + followers */}
@@ -227,6 +274,17 @@ export function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Goal Completion Modal */}
+      <GoalCompletionModal
+        isOpen={showCompletionModal}
+        onClose={handleCompleteGoal}
+        onCreateNew={handleCreateNewGoal}
+        daysCompleted={goalCompletion.daysCompleted}
+        totalDays={goalCompletion.totalDays}
+        isPerfect={goalCompletion.isPerfect}
+        followersGained={followersGained}
+      />
     </div>
   )
 }

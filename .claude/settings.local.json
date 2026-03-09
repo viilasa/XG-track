@@ -16,7 +16,8 @@
       "Bash(curl -s \"https://api.twitterapi.io/twitter/user/info?userName=twitter\" -H \"X-API-Key: new1_9454d1ca88c64c23ad3e21659376db16\")",
       "Bash(curl -s \"https://api.twitterapi.io/twitter/user/tweets?userId=1683696495198089217\" -H \"X-API-Key: new1_9454d1ca88c64c23ad3e21659376db16\")",
       "Bash(curl -s \"https://api.twitterapi.io/twitter/user/info?userName=nasa\" -H \"X-API-Key: new1_9454d1ca88c64c23ad3e21659376db16\")",
-      "Bash(curl -s \"https://api.twitterapi.io/twitter/user/tweets?userId=11348282\" -H \"X-API-Key: new1_9454d1ca88c64c23ad3e21659376db16\")"
+      "Bash(curl -s \"https://api.twitterapi.io/twitter/user/tweets?userId=11348282\" -H \"X-API-Key: new1_9454d1ca88c64c23ad3e21659376db16\")",
+      "Bash(where gh.exe)"
     ]
   }
 }

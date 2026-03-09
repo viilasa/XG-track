@@ -2,23 +2,23 @@
 -- XG Tracker — Fix: Restore previous 7-day challenge goal
 -- Run this in Supabase SQL Editor
 -- ============================================================
--- This removes the accidentally-added tweet goal and restores
--- the original 7-day challenge that started on Mon March 2, 2026.
+-- auth.uid() does NOT work in the SQL Editor — use your actual user_id.
 
--- Step 1: Check current goals (run this first to see what's there)
--- SELECT * FROM goals WHERE user_id = auth.uid();
+-- Step 1: Find your user_id (run this first)
+SELECT id, twitter_username FROM profiles;
 
--- Step 2: Restore the original 7-day challenge
-UPDATE goals
-SET
-  goal_duration_days = 7,
-  goal_started_at = '2026-03-02T00:00:00.000Z',  -- Monday March 2
-  track_replies = true,
-  track_tweets = false,          -- remove the tweet goal that was added
-  replies_per_day = 5,           -- adjust to your original value
-  updated_at = now()
-WHERE user_id = auth.uid();
+-- Step 2: Copy your user_id from Step 1 and replace YOUR_USER_ID_HERE below.
+-- Then uncomment and run Step 2.
 
--- Step 3: Verify the fix
--- SELECT id, replies_per_day, tweets_per_day, goal_duration_days, goal_started_at, track_replies, track_tweets
--- FROM goals WHERE user_id = auth.uid();
+-- UPDATE goals
+-- SET
+--   goal_duration_days = 7,
+--   goal_started_at = '2026-03-02T00:00:00.000Z',
+--   track_replies = true,
+--   track_tweets = false,
+--   replies_per_day = 5,
+--   updated_at = now()
+-- WHERE user_id = 'YOUR_USER_ID_HERE';
+
+-- Step 3: Verify
+-- SELECT * FROM goals WHERE user_id = 'YOUR_USER_ID_HERE';
