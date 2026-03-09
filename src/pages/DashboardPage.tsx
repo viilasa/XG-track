@@ -121,72 +121,57 @@ export function DashboardPage() {
           </p>
         </div>
 
-        {/* Streak cards */}
-        <section>
-          <h2 className="text-x-text font-bold mb-3">Your Streaks</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <StreakCard
-              label="Reply Streak"
-              current={streaks?.current_reply_streak ?? 0}
-              longest={streaks?.longest_reply_streak ?? 0}
-              icon="🔥"
-              color="orange"
-              active={(streaks?.current_reply_streak ?? 0) > 0}
-            />
-            <StreakCard
-              label="Tweet Streak"
-              current={streaks?.current_tweet_streak ?? 0}
-              longest={streaks?.longest_tweet_streak ?? 0}
-              icon="⚡"
-              color="blue"
-              active={(streaks?.current_tweet_streak ?? 0) > 0}
-            />
-            {/* <StreakCard
-              label="Engagement"
-              current={streaks?.current_engagement_streak ?? 0}
-              longest={streaks?.longest_engagement_streak ?? 0}
-              icon="💪"
-              color="green"
-              active={(streaks?.current_engagement_streak ?? 0) > 0}
-            /> */}
-          </div>
-        </section>
-
-        {/* Manual Counter - Quick Add (commented out for later use)
-        <section>
-          <ManualCounter
-            repliesCount={manualReplies}
-            tweetsCount={manualTweets}
-            onAddReply={incrementReply}
-            onAddTweet={incrementTweet}
-          />
-        </section>
-        */}
-
-        {/* Today's goals */}
-        <section>
-          <h2 className="text-x-text font-bold mb-3">Today's Goals</h2>
-          <div className="space-y-3">
-            {(goals?.track_replies ?? true) && (
-              <GoalProgress
-                label="Replies Sent"
-                current={Math.max(todayStats?.replies_sent ?? 0, todayReplies.length)}
-                goal={goals?.replies_per_day ?? 5}
-                icon="💬"
-                color="blue"
-              />
-            )}
-            {(goals?.track_tweets ?? true) && (
-              <GoalProgress
-                label="Tweets Posted"
-                current={Math.max(todayStats?.tweets_posted ?? 0, todayTweets.length)}
-                goal={goals?.tweets_per_day ?? 3}
-                icon="📝"
+        {/* Streak cards - only show when there's an active challenge */}
+        {goals?.goal_duration_days != null && !goalCompletion.isComplete && (
+          <section>
+            <h2 className="text-x-text font-bold mb-3">Your Streaks</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <StreakCard
+                label="Reply Streak"
+                current={streaks?.current_reply_streak ?? 0}
+                longest={streaks?.longest_reply_streak ?? 0}
+                icon="🔥"
                 color="orange"
+                active={(streaks?.current_reply_streak ?? 0) > 0}
               />
-            )}
-          </div>
-        </section>
+              <StreakCard
+                label="Tweet Streak"
+                current={streaks?.current_tweet_streak ?? 0}
+                longest={streaks?.longest_tweet_streak ?? 0}
+                icon="⚡"
+                color="blue"
+                active={(streaks?.current_tweet_streak ?? 0) > 0}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* Today's goals - only show when there's an active challenge */}
+        {goals?.goal_duration_days != null && !goalCompletion.isComplete && (
+          <section>
+            <h2 className="text-x-text font-bold mb-3">Today's Goals</h2>
+            <div className="space-y-3">
+              {(goals?.track_replies ?? true) && (
+                <GoalProgress
+                  label="Replies Sent"
+                  current={Math.max(todayStats?.replies_sent ?? 0, todayReplies.length)}
+                  goal={goals?.replies_per_day ?? 5}
+                  icon="💬"
+                  color="blue"
+                />
+              )}
+              {(goals?.track_tweets ?? true) && (
+                <GoalProgress
+                  label="Tweets Posted"
+                  current={Math.max(todayStats?.tweets_posted ?? 0, todayTweets.length)}
+                  goal={goals?.tweets_per_day ?? 3}
+                  icon="📝"
+                  color="orange"
+                />
+              )}
+            </div>
+          </section>
+        )}
 
         {/* 7-day (or N-day) challenge */}
         {goals && (goals.goal_duration_days != null) && !goalCompletion.isComplete && (
@@ -207,6 +192,21 @@ export function DashboardPage() {
                 ? 'Great work! Start a new challenge to keep the momentum going.'
                 : 'Set a goal challenge to track your progress over time.'}
             </p>
+            
+            {/* Show best streaks when no active challenge */}
+            {(streaks?.longest_reply_streak || streaks?.longest_tweet_streak) ? (
+              <div className="flex justify-center gap-6 mb-4 py-3 border-t border-b border-x-border">
+                <div className="text-center">
+                  <p className="text-orange-500 font-black text-xl">🔥 {streaks?.longest_reply_streak ?? 0}</p>
+                  <p className="text-x-muted text-xs">Best Reply Streak</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-x-blue font-black text-xl">⚡ {streaks?.longest_tweet_streak ?? 0}</p>
+                  <p className="text-x-muted text-xs">Best Tweet Streak</p>
+                </div>
+              </div>
+            ) : null}
+            
             <Link
               to="/goals"
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-x-blue text-white font-bold hover:bg-x-blue/90 transition-colors"

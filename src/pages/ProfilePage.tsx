@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { LogOut, Target, ExternalLink, Trophy } from 'lucide-react'
+import { LogOut, Target, ExternalLink, Trophy, Flame, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '@/hooks/useAuth'
 import { useGoals } from '@/hooks/useGoals'
 import { useGoalHistory } from '@/hooks/useGoalHistory'
+import { useStreaks } from '@/hooks/useStreaks'
 import { GoalModal } from '@/components/modals/GoalModal'
 import type { GoalHistory } from '@/types'
 
@@ -12,6 +13,7 @@ export function ProfilePage() {
   const { profile, signOut } = useAuth()
   const { goals, saveGoals } = useGoals(profile?.id)
   const { history } = useGoalHistory(profile?.id)
+  const { streaks } = useStreaks(profile?.id)
   const [goalModalOpen, setGoalModalOpen] = useState(false)
 
   if (!profile) return null
@@ -69,6 +71,36 @@ export function ProfilePage() {
             <ExternalLink size={16} className="text-x-muted" />
           </a>
         </div>
+
+        {/* Best Streaks */}
+        {(streaks?.longest_reply_streak || streaks?.longest_tweet_streak) ? (
+          <div className="space-y-3">
+            <h2 className="text-x-text font-bold flex items-center gap-2">
+              <Trophy size={18} className="text-yellow-500" />
+              Best Streaks
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-x-card border border-x-border rounded-xl p-4 text-center">
+                <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center mx-auto mb-2">
+                  <Flame className="text-orange-500" size={24} />
+                </div>
+                <p className="text-x-text font-black text-2xl">
+                  {streaks?.longest_reply_streak ?? 0}
+                </p>
+                <p className="text-x-muted text-xs">Best Reply Streak</p>
+              </div>
+              <div className="bg-x-card border border-x-border rounded-xl p-4 text-center">
+                <div className="w-12 h-12 rounded-full bg-x-blue/10 flex items-center justify-center mx-auto mb-2">
+                  <Zap className="text-x-blue" size={24} />
+                </div>
+                <p className="text-x-text font-black text-2xl">
+                  {streaks?.longest_tweet_streak ?? 0}
+                </p>
+                <p className="text-x-muted text-xs">Best Tweet Streak</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Actions */}
         <div className="space-y-3">
